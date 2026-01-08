@@ -9,6 +9,7 @@ info:
 servers:
   - url: https://app.ourskylight.com
 tags:
+  - name: Authentication
   - name: Frames
   - name: Chores
   - name: Categories
@@ -31,6 +32,60 @@ components:
         Observed Authorization header uses an opaque Basic token. Treat as secret.
 
   schemas:
+    # ---- Authentication ----
+    AuthenticationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+        password:
+          type: string
+          format: password
+          description: User's password
+      required: [email, password]
+
+    AuthenticatedUserAttributes:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        token:
+          type: string
+          description: API token (combine with id using 'id:token' format and base64 encode for Authorization header)
+        subscription_status:
+          type: string
+          description: User's subscription level (e.g., 'basic')
+      required: [email, token, subscription_status]
+
+    AuthenticatedUserResource:
+      type: object
+      properties:
+        id:
+          type: string
+          description: User ID (combine with token using 'id:token' format and base64 encode for Authorization header)
+        type:
+          type: string
+          enum: [authenticated_user]
+        attributes:
+          $ref: '#/components/schemas/AuthenticatedUserAttributes'
+      required: [id, type, attributes]
+
+    AuthenticationResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AuthenticatedUserResource'
+        meta:
+          type: object
+          properties:
+            password_reset:
+              type: boolean
+              description: Indicates whether a password reset is required
+      required: [data]
+
     JsonApiResourceId:
       type: object
       properties:
@@ -358,6 +413,51 @@ components:
       required: [type, id]
 
 paths:
+  # ---- Authentication ----
+  /api/sessions:
+    post:
+      tags: [Authentication]
+      summary: Authenticate user and obtain API token
+      description: |
+        Creates a new session by authenticating with email and password.
+        Returns a user ID and token that must be combined (id:token) and base64 encoded
+        to create the Authorization header for subsequent API requests.
+
+        Example:
+        1. Concatenate: "12345678:atu_Gxf2DRxSWCC2WIN8tvj7xDdA5h5ITt6a"
+        2. Base64 encode: echo -n "12345678:atu_Gxf..." | base64
+        3. Use as: Authorization: Basic <base64-encoded-string>
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticationRequest'
+            example:
+              email: "yourname@email.com"
+              password: "thisis-yourpa-ssword"
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationResponse'
+              example:
+                data:
+                  id: "12345678"
+                  type: "authenticated_user"
+                  attributes:
+                    email: "yourname@email.com"
+                    token: "atu_Gxf2DRxSWCC2WIN8tvj7xDdA5h5ITt6a"
+                    subscription_status: "basic"
+                meta:
+                  password_reset: true
+        '401':
+          description: Invalid credentials
+        '422':
+          description: Validation error (invalid email format, missing fields, etc.)
+
   # ---- Frames ----
   /api/frames/{frameId}:
     get:
