@@ -49,6 +49,8 @@ Content-Type: application/json
 }
 ```
 
+> **Note**: The above example uses fictional credentials for demonstration purposes only. Real tokens and IDs will differ. Never commit real credentials to version control.
+
 ### Generating Your Authorization Token
 
 To use this token in subsequent API requests, you need to:
@@ -68,6 +70,18 @@ To use this token in subsequent API requests, you need to:
    ```http
    Authorization: Basic MTIzNDU2Nzg6YXR1X0d4ZjJEUnhTV0NDMldJTjh0dmo3eERkQTVoNUlUdDZh
    ```
+
+#### Testing the Base64 Encoding
+
+To verify you're encoding correctly, try this test example:
+
+```bash
+# Test with id="testuser123" and token="test_token_abc"
+echo -n "testuser123:test_token_abc" | base64
+# Expected output: dGVzdHVzZXIxMjM6dGVzdF90b2tlbl9hYmM=
+```
+
+If your output matches, you're encoding correctly. Replace with your actual `id:token` from the login response.
 
 ### Example (cURL)
 
