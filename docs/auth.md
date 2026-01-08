@@ -10,7 +10,91 @@ This guide shows how to capture a token safely for testing documented endpoints.
 
 ---
 
-## 1) Capture via Proxy (Recommended)
+## 1) Programmatic Authentication (API Login)
+
+If you need to authenticate programmatically (for scripts, automation, or testing), you can use the login endpoint to obtain a token.
+
+### Endpoint
+
+```http
+POST https://app.ourskylight.com/api/sessions
+Content-Type: application/json
+```
+
+### Request Body
+
+```json
+{
+  "email": "yourname@email.com",
+  "password": "thisis-yourpa-ssword"
+}
+```
+
+### Response
+
+```json
+{
+  "data": {
+    "id": "12345678",
+    "type": "authenticated_user",
+    "attributes": {
+      "email": "yourname@email.com",
+      "token": "atu_Gxf2DRxSWCC2WIN8tvj7xDdA5h5ITt6a",
+      "subscription_status": "basic"
+    }
+  },
+  "meta": {
+    "password_reset": true
+  }
+}
+```
+
+### Generating Your Authorization Token
+
+To use this token in subsequent API requests, you need to:
+
+1. **Concatenate** the `id` and `token` fields with a colon separator:
+   ```
+   12345678:atu_Gxf2DRxSWCC2WIN8tvj7xDdA5h5ITt6a
+   ```
+
+2. **Base64 encode** the concatenated string:
+   ```bash
+   echo -n "12345678:atu_Gxf2DRxSWCC2WIN8tvj7xDdA5h5ITt6a" | base64
+   ```
+   This produces: `MTIzNDU2Nzg6YXR1X0d4ZjJEUnhTV0NDMldJTjh0dmo3eERkQTVoNUlUdDZh`
+
+3. **Use it** in your requests with the `Basic` authorization scheme:
+   ```http
+   Authorization: Basic MTIzNDU2Nzg6YXR1X0d4ZjJEUnhTV0NDMldJTjh0dmo3eERkQTVoNUlUdDZh
+   ```
+
+### Example (cURL)
+
+```bash
+# Login and get token
+curl -X POST 'https://app.ourskylight.com/api/sessions' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "yourname@email.com",
+    "password": "thisis-yourpa-ssword"
+  }'
+
+# Use the token (after base64 encoding id:token)
+curl 'https://app.ourskylight.com/api/frames/REDACTED/chores' \
+  -H 'Authorization: Basic REDACTED'
+```
+
+### Security Notes
+
+- **Never** commit credentials or real tokens to version control
+- Store credentials securely (environment variables, credential managers, etc.)
+- The `password_reset` flag in the meta field indicates whether a password reset is required
+- Treat the token as a secret — it provides full access to your account
+
+---
+
+## 2) Capture via Proxy (Alternative Method)
 
 Use one of these HTTPS debugging proxies:
 - **Proxyman** (macOS GUI)
@@ -32,7 +116,7 @@ Use one of these HTTPS debugging proxies:
 
 ---
 
-## 2) Electron/Chromium Apps (DevTools)
+## 3) Electron/Chromium Apps (DevTools)
 
 If the desktop app is Electron/Chromium-based:
 
@@ -47,7 +131,7 @@ This avoids TLS interception and certificate pinning issues.
 
 ---
 
-## 3) If HTTPS Decryption Fails (Certificate Pinning)
+## 4) If HTTPS Decryption Fails (Certificate Pinning)
 
 Some apps validate the server certificate in code (“pinning”). If your proxy shows CONNECT tunnels but no decrypted traffic:
 
@@ -59,7 +143,7 @@ Some apps validate the server certificate in code (“pinning”). If your proxy
 
 ---
 
-## 4) Using the Token (Postman/Insomnia/cURL)
+## 5) Using the Token (Postman/Insomnia/cURL)
 
 - Add the header to your request:
   ```http
@@ -81,7 +165,7 @@ If you receive **401 Unauthorized**:
 
 ---
 
-## 5) Redaction & Sharing
+## 6) Redaction & Sharing
 
 When contributing examples to this repo:
 - Replace tokens and any PII with `REDACTED` (keep keys/shape intact).
