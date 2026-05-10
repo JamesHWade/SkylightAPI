@@ -88,6 +88,7 @@ class CliState:
     frame_id: str | None
     timeout: float | None
     compact: bool
+    output: str
 
 
 @app.callback()
@@ -120,13 +121,33 @@ def callback(
         bool,
         typer.Option("--compact", help="Emit compact JSON without indentation."),
     ] = False,
+    output: Annotated[
+        str,
+        typer.Option("--output", "-o", help="Output format: json or human."),
+    ] = "json",
     version: Annotated[
         bool,
         typer.Option("--version", help="Show version and exit."),
     ] = False,
 ) -> None:
+    if output not in {"json", "human"}:
+        emit_json(
+            {
+                "error": {
+                    "kind": "usage_error",
+                    "message": "Invalid output format. Use 'json' or 'human'.",
+                }
+            },
+            err=True,
+            compact=compact,
+        )
+        raise typer.Exit(1)
+
     if version:
-        emit_json({"version": __version__}, compact=compact)
+        if output == "human":
+            typer.echo(f"skylightctl {__version__}")
+        else:
+            emit_json({"version": __version__}, compact=compact)
         raise typer.Exit()
 
     ctx.obj = CliState(
@@ -136,6 +157,7 @@ def callback(
         frame_id=frame_id,
         timeout=timeout,
         compact=compact,
+        output=output,
     )
 
 
@@ -143,61 +165,59 @@ def callback(
 def capabilities(ctx: typer.Context) -> None:
     """Print the stable command surface for agents."""
     state = _state(ctx)
-    emit_json(
-        {
-            "version": __version__,
-            "defaults": {
-                "json": True,
-                "write_safety": "mutations require --execute; otherwise dry-run",
-                "auth_env": "SKYLIGHT_AUTH_HEADER",
-                "frame_env": "SKYLIGHT_FRAME_ID",
-            },
-            "commands": [
-                {"name": "auth login", "method": "OAuth", "operationId": None},
-                {"name": "auth refresh", "method": "OAuth", "operationId": None},
-                {"name": "doctor", "method": "GET", "operationId": None},
-                {"name": "smoke read", "method": "GET", "operationId": None},
-                {"name": "frames list", "method": "GET", "operationId": "listFrames"},
-                {"name": "frames get", "method": "GET", "operationId": "getFrame"},
-                {"name": "frames use", "method": "GET", "operationId": None},
-                {"name": "chores list", "method": "GET", "operationId": "listChores"},
-                {"name": "chores create", "method": "POST", "operationId": "createChore"},
-                {"name": "chores update", "method": "PUT", "operationId": "updateChore"},
-                {"name": "chores complete", "method": "PUT", "operationId": "setChoreCompletion"},
-                {"name": "chores skip", "method": "PUT", "operationId": "setChoreCompletion"},
-                {"name": "chores delete", "method": "DELETE", "operationId": "deleteChore"},
-                {"name": "categories list", "method": "GET", "operationId": "listCategories"},
-                {"name": "devices list", "method": "GET", "operationId": "listDevices"},
-                {"name": "lists list", "method": "GET", "operationId": "listLists"},
-                {"name": "lists get", "method": "GET", "operationId": "getList"},
-                {
-                    "name": "task-box create",
-                    "method": "POST",
-                    "operationId": "createTaskBoxItem",
-                },
-                {
-                    "name": "calendars sources",
-                    "method": "GET",
-                    "operationId": "listSourceCalendars",
-                },
-                {
-                    "name": "calendars events",
-                    "method": "GET",
-                    "operationId": "listCalendarEvents",
-                },
-                {"name": "rewards list", "method": "GET", "operationId": "listRewards"},
-                {"name": "rewards points", "method": "GET", "operationId": "listRewardPoints"},
-                {"name": "raw get", "method": "GET", "operationId": None},
-                {"name": "raw post", "method": "POST", "operationId": None},
-                {"name": "raw put", "method": "PUT", "operationId": None},
-                {"name": "raw patch", "method": "PATCH", "operationId": None},
-                {"name": "raw delete", "method": "DELETE", "operationId": None},
-                {"name": "discover routes", "method": "GET", "operationId": None},
-                {"name": "config show", "method": None, "operationId": None},
-            ],
+    payload = {
+        "version": __version__,
+        "defaults": {
+            "json": True,
+            "write_safety": "mutations require --execute; otherwise dry-run",
+            "auth_env": "SKYLIGHT_AUTH_HEADER",
+            "frame_env": "SKYLIGHT_FRAME_ID",
         },
-        compact=state.compact,
-    )
+        "commands": [
+            {"name": "auth login", "method": "OAuth", "operationId": None},
+            {"name": "auth refresh", "method": "OAuth", "operationId": None},
+            {"name": "doctor", "method": "GET", "operationId": None},
+            {"name": "smoke read", "method": "GET", "operationId": None},
+            {"name": "frames list", "method": "GET", "operationId": "listFrames"},
+            {"name": "frames get", "method": "GET", "operationId": "getFrame"},
+            {"name": "frames use", "method": "GET", "operationId": None},
+            {"name": "chores list", "method": "GET", "operationId": "listChores"},
+            {"name": "chores create", "method": "POST", "operationId": "createChore"},
+            {"name": "chores update", "method": "PUT", "operationId": "updateChore"},
+            {"name": "chores complete", "method": "PUT", "operationId": "setChoreCompletion"},
+            {"name": "chores skip", "method": "PUT", "operationId": "setChoreCompletion"},
+            {"name": "chores delete", "method": "DELETE", "operationId": "deleteChore"},
+            {"name": "categories list", "method": "GET", "operationId": "listCategories"},
+            {"name": "devices list", "method": "GET", "operationId": "listDevices"},
+            {"name": "lists list", "method": "GET", "operationId": "listLists"},
+            {"name": "lists get", "method": "GET", "operationId": "getList"},
+            {
+                "name": "task-box create",
+                "method": "POST",
+                "operationId": "createTaskBoxItem",
+            },
+            {
+                "name": "calendars sources",
+                "method": "GET",
+                "operationId": "listSourceCalendars",
+            },
+            {
+                "name": "calendars events",
+                "method": "GET",
+                "operationId": "listCalendarEvents",
+            },
+            {"name": "rewards list", "method": "GET", "operationId": "listRewards"},
+            {"name": "rewards points", "method": "GET", "operationId": "listRewardPoints"},
+            {"name": "raw get", "method": "GET", "operationId": None},
+            {"name": "raw post", "method": "POST", "operationId": None},
+            {"name": "raw put", "method": "PUT", "operationId": None},
+            {"name": "raw patch", "method": "PATCH", "operationId": None},
+            {"name": "raw delete", "method": "DELETE", "operationId": None},
+            {"name": "discover routes", "method": "GET", "operationId": None},
+            {"name": "config show", "method": None, "operationId": None},
+        ],
+    }
+    emit_json(payload, compact=state.compact)
 
 
 @app.command("doctor")
@@ -259,30 +279,26 @@ def doctor(
     ready = all(check["ok"] for check in checks) and all(
         result.get("ok") or result.get("skipped") for result in live_results
     )
-    emit_json(
-        {
-            "status": "ok" if ready else "needs_setup",
-            "ready": ready,
-            "profile": settings.profile,
-            "config_path": str(settings.config_path),
-            "base_url": settings.base_url,
-            "checks": checks,
-            "live": live_results,
-            "next_steps": _doctor_next_steps(settings, checks),
-        },
-        compact=state.compact,
-    )
+    payload = {
+        "status": "ok" if ready else "needs_setup",
+        "ready": ready,
+        "profile": settings.profile,
+        "config_path": str(settings.config_path),
+        "base_url": settings.base_url,
+        "checks": checks,
+        "live": live_results,
+        "next_steps": _doctor_next_steps(settings, checks),
+    }
+    _emit_payload(state, payload, human_lines=_human_doctor(payload))
 
 
 @config_app.command("show")
 def config_show(ctx: typer.Context) -> None:
     """Show resolved config with secrets redacted."""
     state = _state(ctx)
-    try:
-        settings = _settings(ctx, require_config_auth=False, require_config_frame=False)
-    except ConfigError as exc:
-        _exit_error(state, "config_error", str(exc))
-    emit_json(public_settings(settings), compact=state.compact)
+    settings = _settings(ctx, require_config_auth=False, require_config_frame=False)
+    payload = public_settings(settings)
+    _emit_payload(state, payload, human_lines=_human_config(payload))
 
 
 @auth_app.command("login")
@@ -370,7 +386,11 @@ def auth_login(
         payload["saved"] = True
         payload["profile"] = settings.profile
         payload["config_path"] = str(settings.config_path)
-    emit_json(payload, compact=state.compact)
+    _emit_payload(
+        state,
+        payload,
+        human_lines=None if show_secret else _human_oauth("Authenticated", payload),
+    )
 
 
 @auth_app.command("refresh")
@@ -442,7 +462,11 @@ def auth_refresh(
         payload["saved"] = True
         payload["profile"] = settings.profile
         payload["config_path"] = str(settings.config_path)
-    emit_json(payload, compact=state.compact)
+    _emit_payload(
+        state,
+        payload,
+        human_lines=None if show_secret else _human_oauth("Refreshed credentials", payload),
+    )
 
 
 @frames_app.command("list")
@@ -525,17 +549,15 @@ def use_frame(
             _exit_error(state, "network_error", str(exc))
 
     _save_frame_settings(settings, selected_frame)
-    emit_json(
-        {
-            "saved": True,
-            "profile": settings.profile,
-            "config_path": str(settings.config_path),
-            "frame_id": selected_frame,
-            "source": source,
-            "verified": verify,
-        },
-        compact=state.compact,
-    )
+    payload = {
+        "saved": True,
+        "profile": settings.profile,
+        "config_path": str(settings.config_path),
+        "frame_id": selected_frame,
+        "source": source,
+        "verified": verify,
+    }
+    _emit_payload(state, payload, human_lines=_human_frame_use(payload))
 
 
 @chores_app.command("list")
@@ -1145,17 +1167,15 @@ def smoke_read(
                 )
 
     failures = [result for result in results if not result.get("ok") and not result.get("skipped")]
-    emit_json(
-        {
-            "status": "ok" if not failures else "failed",
-            "checks": len(results),
-            "failures": len(failures),
-            "frame_id": smoke_frame,
-            "frame_id_source": frame_source if smoke_frame else None,
-            "results": results,
-        },
-        compact=state.compact,
-    )
+    payload = {
+        "status": "ok" if not failures else "failed",
+        "checks": len(results),
+        "failures": len(failures),
+        "frame_id": smoke_frame,
+        "frame_id_source": frame_source if smoke_frame else None,
+        "results": results,
+    }
+    _emit_payload(state, payload, human_lines=_human_smoke(payload))
 
 
 @discover_app.command("routes")
@@ -1210,18 +1230,16 @@ def discover_routes(
             )
         )
 
-    emit_json(
-        {
-            "base_url": settings.base_url,
-            "probe_frame_id": probe_frame_id,
-            "interpretation": {
-                "401_with_skylight_api_version": "route likely exists and requires auth",
-                "404_without_skylight_api_version": "route likely did not match",
-            },
-            "routes": results,
+    payload = {
+        "base_url": settings.base_url,
+        "probe_frame_id": probe_frame_id,
+        "interpretation": {
+            "401_with_skylight_api_version": "route likely exists and requires auth",
+            "404_without_skylight_api_version": "route likely did not match",
         },
-        compact=state.compact,
-    )
+        "routes": results,
+    }
+    _emit_payload(state, payload, human_lines=_human_discover(payload))
 
 
 def run() -> None:
@@ -1277,7 +1295,7 @@ def _emit_request(
     except httpx.HTTPError as exc:
         _exit_error(state, "network_error", str(exc))
 
-    emit_json(data, compact=state.compact)
+    _emit_payload(state, data, human_lines=_human_api_data(method, path, data))
 
 
 def _emit_mutation(
@@ -1297,14 +1315,12 @@ def _emit_mutation(
     )
     client = SkylightClient(settings)
     if not execute:
-        emit_json(
-            {
-                "dry_run": True,
-                "message": "Pass --execute to send this request.",
-                "request": client.preview_request(method, path, params=params, json_body=body),
-            },
-            compact=state.compact,
-        )
+        payload = {
+            "dry_run": True,
+            "message": "Pass --execute to send this request.",
+            "request": client.preview_request(method, path, params=params, json_body=body),
+        }
+        _emit_payload(state, payload, human_lines=_human_dry_run(payload))
         return
 
     try:
@@ -1321,7 +1337,7 @@ def _emit_mutation(
     except httpx.HTTPError as exc:
         _exit_error(state, "network_error", str(exc))
 
-    emit_json(data, compact=state.compact)
+    _emit_payload(state, data, human_lines=_human_api_data(method, path, data))
 
 
 def _read_check(
@@ -1428,6 +1444,275 @@ def _body_shape(body: Any) -> str:
     return type(body).__name__
 
 
+def _emit_payload(
+    state: CliState,
+    payload: Any,
+    *,
+    human_lines: list[str] | None = None,
+    err: bool = False,
+) -> None:
+    if state.output == "human" and human_lines is not None:
+        for line in human_lines:
+            typer.echo(line, err=err)
+        return
+
+    emit_json(payload, err=err, compact=state.compact)
+
+
+def _human_doctor(payload: dict[str, Any]) -> list[str]:
+    lines = [
+        f"Status: {payload['status']}",
+        f"Profile: {payload['profile']}",
+        f"Config: {payload['config_path']}",
+        f"Base URL: {payload['base_url']}",
+        "",
+        "Checks:",
+    ]
+    for check in payload["checks"]:
+        lines.append(f"  [{_status_label(check)}] {check['name']} - {check['detail']}")
+
+    if payload.get("live"):
+        lines.extend(["", "Live checks:"])
+        for result in payload["live"]:
+            detail = _result_detail(result)
+            lines.append(f"  [{_status_label(result)}] {result['name']}{detail}")
+
+    if payload.get("next_steps"):
+        lines.extend(["", "Next steps:"])
+        lines.extend(f"  {step}" for step in payload["next_steps"])
+
+    return lines
+
+
+def _human_config(payload: dict[str, Any]) -> list[str]:
+    return [
+        f"Profile: {payload['profile']}",
+        f"Config: {payload['config_path']}",
+        f"Base URL: {payload['base_url']}",
+        f"API version: {payload['api_version']}",
+        f"Timeout: {payload['timeout']}",
+        f"Frame ID: {_display_value(payload.get('frame_id'))}",
+        f"Auth header: {_display_value(payload.get('auth_header'))}",
+        f"Refresh token: {_display_value(payload.get('refresh_token'))}",
+        f"Device fingerprint: {_display_value(payload.get('device_fingerprint'))}",
+    ]
+
+
+def _human_oauth(title: str, payload: dict[str, Any]) -> list[str]:
+    lines = [
+        f"{title}.",
+        f"Token type: {payload['token_type']}",
+        f"Expires in: {payload['expires_in']} seconds",
+        f"Device fingerprint: {payload['device_fingerprint']}",
+        "Authorization header: Bearer REDACTED",
+    ]
+    if payload.get("refresh_token_redacted"):
+        lines.append("Refresh token: REDACTED")
+    if payload.get("saved"):
+        lines.extend(
+            [
+                f"Saved profile: {payload['profile']}",
+                f"Config: {payload['config_path']}",
+            ]
+        )
+    lines.append("Secrets redacted. Use --show-secret for JSON shell exports.")
+    return lines
+
+
+def _human_frame_use(payload: dict[str, Any]) -> list[str]:
+    return [
+        "Default frame saved.",
+        f"Frame ID: {payload['frame_id']}",
+        f"Source: {payload['source']}",
+        f"Verified: {payload['verified']}",
+        f"Profile: {payload['profile']}",
+        f"Config: {payload['config_path']}",
+    ]
+
+
+def _human_smoke(payload: dict[str, Any]) -> list[str]:
+    lines = [
+        f"Status: {payload['status']}",
+        f"Checks: {payload['checks']}",
+        f"Failures: {payload['failures']}",
+        f"Frame ID: {_display_value(payload.get('frame_id'))}",
+        f"Frame source: {_display_value(payload.get('frame_id_source'))}",
+        "",
+        "Results:",
+    ]
+    for result in payload["results"]:
+        detail = _result_detail(result)
+        lines.append(f"  [{_status_label(result)}] {result['name']}{detail}")
+    return lines
+
+
+def _human_discover(payload: dict[str, Any]) -> list[str]:
+    lines = [
+        f"Base URL: {payload['base_url']}",
+        f"Probe frame ID: {payload['probe_frame_id']}",
+        "",
+        "Routes:",
+    ]
+    for route in payload["routes"]:
+        if route.get("error"):
+            lines.append(f"  [ERROR] {route['method']} {route['template']} - {route['error']}")
+            continue
+        lines.append(
+            "  "
+            f"[{route['classification']}] "
+            f"{route['method']} {route['template']} -> {route['status_code']}"
+        )
+    return lines
+
+
+def _human_dry_run(payload: dict[str, Any]) -> list[str]:
+    request = payload["request"]
+    lines = [
+        f"Dry run. {payload['message']}",
+        f"{request['method']} {request['url']}",
+    ]
+    if request.get("params"):
+        lines.extend(["", "Query:"])
+        lines.extend(_json_lines(request["params"]))
+    if request.get("headers"):
+        lines.extend(["", "Headers:"])
+        for key, value in request["headers"].items():
+            lines.append(f"  {key}: {value}")
+    if "body" in request:
+        lines.extend(["", "Body:"])
+        lines.extend(_json_lines(request["body"]))
+    return lines
+
+
+def _human_api_data(method: str, path: str, data: Any) -> list[str]:
+    lines = [f"{method.upper()} {path}"]
+    resources = _resource_collection(data)
+    if resources is not None:
+        count = len(resources)
+        lines.append(f"Resources: {count}")
+        for resource in resources[:20]:
+            lines.append(f"  {_resource_summary(resource)}")
+        if count > 20:
+            lines.append(f"  ... {count - 20} more")
+        return lines
+
+    if isinstance(data, dict) and isinstance(data.get("data"), dict):
+        lines.append("Resource:")
+        lines.append(f"  {_resource_summary(data['data'])}")
+        return lines
+
+    if data is None:
+        lines.append("No response body.")
+        return lines
+
+    if isinstance(data, dict):
+        lines.append("Object:")
+        lines.extend(_json_lines(_trim_mapping(data)))
+        return lines
+
+    lines.extend(_json_lines(data))
+    return lines
+
+
+def _resource_collection(data: Any) -> list[Any] | None:
+    if isinstance(data, dict) and isinstance(data.get("data"), list):
+        return data["data"]
+    if isinstance(data, list):
+        return data
+    return None
+
+
+def _resource_summary(resource: Any) -> str:
+    if not isinstance(resource, dict):
+        return _single_line(resource)
+
+    resource_type = resource.get("type")
+    resource_id = resource.get("id")
+    attributes = resource.get("attributes")
+    name = None
+    if isinstance(attributes, dict):
+        for key in ("name", "summary", "title", "label", "email", "kind", "status"):
+            value = attributes.get(key)
+            if isinstance(value, str) and value:
+                name = value
+                break
+
+    if resource_type or resource_id:
+        pieces = []
+        if resource_type:
+            pieces.append(str(resource_type))
+        if resource_id:
+            pieces.append(str(resource_id))
+        summary = " ".join(pieces)
+        if name:
+            summary += f" - {name}"
+        return summary
+
+    for key in ("name", "summary", "title", "label"):
+        value = resource.get(key)
+        if isinstance(value, str) and value:
+            return value
+
+    if "current_point_balance" in resource and "category_id" in resource:
+        return (
+            f"category {resource['category_id']}: "
+            f"{resource['current_point_balance']} points"
+        )
+
+    return _single_line(_trim_mapping(resource))
+
+
+def _status_label(result: dict[str, Any]) -> str:
+    if result.get("skipped"):
+        return "SKIP"
+    return "OK" if result.get("ok") else "FAIL"
+
+
+def _result_detail(result: dict[str, Any]) -> str:
+    details = []
+    if result.get("status_code") is not None:
+        details.append(f"status {result['status_code']}")
+    if result.get("data_count") is not None:
+        details.append(f"{result['data_count']} items")
+    if result.get("body_shape"):
+        details.append(str(result["body_shape"]))
+    if result.get("reason"):
+        details.append(str(result["reason"]))
+    if result.get("error"):
+        details.append(str(result["error"]))
+    if not details:
+        return ""
+    return " - " + ", ".join(details)
+
+
+def _json_lines(value: Any) -> list[str]:
+    return [f"  {line}" for line in json.dumps(value, indent=2, sort_keys=True).splitlines()]
+
+
+def _trim_mapping(value: dict[str, Any], *, max_items: int = 12) -> dict[str, Any]:
+    trimmed: dict[str, Any] = {}
+    for index, (key, item) in enumerate(value.items()):
+        if index >= max_items:
+            trimmed["..."] = f"{len(value) - max_items} more keys"
+            break
+        trimmed[key] = item
+    return trimmed
+
+
+def _single_line(value: Any, *, max_length: int = 160) -> str:
+    text = json.dumps(value, sort_keys=True) if not isinstance(value, str) else value
+    text = " ".join(text.split())
+    if len(text) <= max_length:
+        return text
+    return text[: max_length - 3] + "..."
+
+
+def _display_value(value: Any) -> str:
+    if value is None or value == "":
+        return "not set"
+    return str(value)
+
+
 def _state(ctx: typer.Context) -> CliState:
     if isinstance(ctx.obj, CliState):
         return ctx.obj
@@ -1438,6 +1723,7 @@ def _state(ctx: typer.Context) -> CliState:
         frame_id=None,
         timeout=None,
         compact=False,
+        output="json",
     )
 
 
@@ -1452,7 +1738,12 @@ def _exit_error(
     if details:
         error["details"] = details
     payload = {"error": error}
-    emit_json(payload, err=True, compact=state.compact)
+    if state.output == "human":
+        typer.echo(f"{kind}: {message}", err=True)
+        if details:
+            typer.echo(json.dumps(details, indent=2, sort_keys=True), err=True)
+    else:
+        emit_json(payload, err=True, compact=state.compact)
     raise typer.Exit(1)
 
 

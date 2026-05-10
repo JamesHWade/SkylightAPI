@@ -9,14 +9,14 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
-      - uses: astral-sh/setup-uv@v5
+          node-version: "24"
+      - uses: astral-sh/setup-uv@v8.1.0
       - name: Validate OpenAPI spec
         run: npx --yes @openapitools/openapi-generator-cli validate -i docs/openapi/openapi.yaml
       - name: Install CLI dependencies
