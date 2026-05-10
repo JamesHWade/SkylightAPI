@@ -1,6 +1,6 @@
 ---
 name: skylight
-description: Use when working with the unofficial Skylight API at app.ourskylight.com or the skylightctl CLI — managing chores, frames, categories, lists, task-box items, calendar events, or rewards. Trigger on mentions of Skylight, ourskylight, skylightctl, or this SkylightAPI repository, and on requests to inspect, list, create, update, complete, skip, or delete any of those resources.
+description: Use when working with the unofficial Skylight API at app.ourskylight.com, the skylightctl CLI, or this SkylightAPI repository. Covers chores, frames, categories, lists, task-box items, calendar events, rewards, endpoint capture, OpenAPI updates, and safe read/write workflows.
 ---
 
 # Skylight skill
@@ -20,6 +20,9 @@ Do **not** engage for unrelated calendar, chore, or reminder apps — Skylight i
 
 ## Standing rules
 
+- **Use the freshest CLI.** If `skylightctl capabilities` is missing commands
+  from this skill, run from a repository checkout with `cd cli && uv run
+  skylightctl ...` or update the installed tool before continuing.
 - **Dry-run first.** Every mutation command prints a redacted request preview unless `--execute` is passed. Always show the dry-run to the user, then ask before re-running with `--execute`.
 - **JSON is the default.** Only pass `--output human` when a person is reading the result. Agents should parse the JSON.
 - **Never log secrets.** Do not run `--show-secret`, do not echo `Authorization` headers, do not paste raw config files. The CLI redacts by default — keep it that way.
@@ -56,7 +59,7 @@ When the user wants to document a route they've observed:
 2. **Redact** tokens, emails, names, frame IDs, GPS, and anything personally identifying. Keep the structure intact.
 3. Save the redacted pair under `examples/` with a descriptive name.
 4. Update `docs/openapi/openapi.yaml` — small, focused diff, one endpoint at a time, JSON:API shape where applicable.
-5. If the endpoint is reach-worthy, add a first-class subcommand in `cli/src/skylight_cli/main.py` and register it in the `capabilities` payload (around line 176).
+5. If the endpoint is common enough for agents to use directly, add a first-class subcommand in `cli/src/skylight_cli/main.py` and register it in the `capabilities` payload.
 
 ## Don't
 

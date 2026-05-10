@@ -17,6 +17,8 @@ jobs:
         with:
           node-version: "24"
       - uses: astral-sh/setup-uv@v8.1.0
+      - name: Validate skills
+        run: python3 scripts/validate_skills.py
       - name: Validate OpenAPI spec
         run: npx --yes @openapitools/openapi-generator-cli validate -i docs/openapi/openapi.yaml
       - name: Install CLI dependencies

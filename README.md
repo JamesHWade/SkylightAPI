@@ -16,6 +16,7 @@ accounts and devices you own or are authorized to manage.
 - `docs/auth.md` - OAuth login and token refresh notes.
 - `examples/` - redacted request and response captures.
 - `cli/` - `skylightctl`, a JSON-first CLI intended for agents and scripts.
+- `skills/skylight/` - Codex skill guidance for safe Skylight API work.
 
 ## CLI Quickstart
 
@@ -138,6 +139,10 @@ request receives `401`, then retries once and persists the rotated refresh
 token.
 
 ## Agent Notes
+
+This repo includes a Codex skill at `skills/skylight/`. Install or symlink that
+folder into `${CODEX_HOME:-~/.codex}/skills/skylight` when you want Codex to
+load the Skylight-specific operating rules automatically.
 
 Agents should start with:
 

@@ -4,6 +4,14 @@ Reference for the agent loop. Every command emits JSON unless `--output human` i
 
 Keep this file in sync with `cli/src/skylight_cli/main.py`. The `capabilities` command (`skylightctl capabilities`) is the source of truth for the stable surface.
 
+If the installed `skylightctl` is missing commands from this file, run from a
+fresh checkout instead:
+
+```bash
+cd cli
+uv run skylightctl capabilities
+```
+
 ## Global flags
 
 ```
