@@ -508,3 +508,89 @@ def test_raw_get_rejects_bad_query() -> None:
     assert result.exit_code == 1
     payload = json.loads(result.stderr)
     assert payload["error"]["kind"] == "usage_error"
+
+
+def test_raw_post_loads_body_from_at_file(tmp_path) -> None:
+    body_file = tmp_path / "body.json"
+    body_file.write_text(json.dumps({"summary": "From file"}), encoding="utf-8")
+
+    result = runner.invoke(
+        main.app,
+        [
+            "raw",
+            "post",
+            "/api/frames/FRAME/chores",
+            "--body",
+            f"@{body_file}",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["dry_run"] is True
+    assert payload["request"]["body"] == {"summary": "From file"}
+
+
+def test_raw_post_treats_unprefixed_string_as_inline_json(tmp_path) -> None:
+    # A bare value that happens to be a path on disk must not be loaded; only
+    # @-prefixed paths become files.
+    decoy = tmp_path / "trap.json"
+    decoy.write_text(json.dumps({"loaded_from_disk": True}), encoding="utf-8")
+
+    result = runner.invoke(
+        main.app,
+        [
+            "raw",
+            "post",
+            "/api/frames/FRAME/chores",
+            "--body",
+            json.dumps({"inline": True}),
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["request"]["body"] == {"inline": True}
+
+
+def test_discover_routes_url_encodes_probe_frame_id(monkeypatch: Any) -> None:
+    captured_urls: list[str] = []
+
+    class FakeResponse:
+        status_code = 404
+        headers: dict[str, str] = {}
+        text = ""
+
+    class FakeClient:
+        def __init__(self, **_kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> FakeClient:
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            return None
+
+        def request(self, _method: str, url: str) -> FakeResponse:
+            captured_urls.append(url)
+            return FakeResponse()
+
+    monkeypatch.setattr(main.httpx, "Client", FakeClient)
+
+    result = runner.invoke(
+        main.app,
+        [
+            "discover",
+            "routes",
+            "--path",
+            "/api/frames/{frameId}/chores",
+            "--probe-frame-id",
+            "FOO/../admin",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output + result.stderr
+    assert captured_urls, "expected at least one HTTP probe"
+    assert all("FOO%2F..%2Fadmin" in url for url in captured_urls)
+    # No request should reach an unintended path like /admin.
+    assert not any(url.endswith("/admin/chores") for url in captured_urls)

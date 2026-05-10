@@ -173,8 +173,14 @@ def save_profile(
     profiles[profile] = existing
     config.setdefault("default_profile", profile)
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.parent.chmod(0o700)
+    parent = config_path.parent
+    parent_existed = parent.exists()
+    parent.mkdir(parents=True, exist_ok=True)
+    if not parent_existed:
+        # Only lock down a directory we just created. The user may have pointed
+        # SKYLIGHT_CONFIG at a shared dir like $HOME or ~/.config; chmod-ing
+        # those would break unrelated tools.
+        parent.chmod(0o700)
     config_path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     config_path.chmod(0o600)
 

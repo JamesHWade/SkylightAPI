@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Never
+from urllib.parse import quote
 
 import httpx
 import typer
@@ -162,8 +163,8 @@ def capabilities(ctx: typer.Context) -> None:
                 {"name": "chores list", "method": "GET", "operationId": "listChores"},
                 {"name": "chores create", "method": "POST", "operationId": "createChore"},
                 {"name": "chores update", "method": "PUT", "operationId": "updateChore"},
-                {"name": "chores complete", "method": "PUT", "operationId": "completeChore"},
-                {"name": "chores skip", "method": "PUT", "operationId": "skipChore"},
+                {"name": "chores complete", "method": "PUT", "operationId": "setChoreCompletion"},
+                {"name": "chores skip", "method": "PUT", "operationId": "setChoreCompletion"},
                 {"name": "chores delete", "method": "DELETE", "operationId": "deleteChore"},
                 {"name": "categories list", "method": "GET", "operationId": "listCategories"},
                 {"name": "devices list", "method": "GET", "operationId": "listDevices"},
@@ -192,6 +193,7 @@ def capabilities(ctx: typer.Context) -> None:
                 {"name": "raw patch", "method": "PATCH", "operationId": None},
                 {"name": "raw delete", "method": "DELETE", "operationId": None},
                 {"name": "discover routes", "method": "GET", "operationId": None},
+                {"name": "config show", "method": None, "operationId": None},
             ],
         },
         compact=state.compact,
@@ -314,7 +316,7 @@ def auth_login(
         typer.Option("--no-input", help="Do not prompt; fail if credentials are missing."),
     ] = False,
 ) -> None:
-    """Authenticate through Skylight's OAuth browser flow and build a Bearer header."""
+    """Authenticate through Skylight's headless OAuth form flow and build a Bearer header."""
     state = _state(ctx)
     settings = _settings(ctx, require_config_auth=False, require_config_frame=False)
     resolved_email = email or os.getenv("SKYLIGHT_EMAIL")
@@ -445,6 +447,7 @@ def auth_refresh(
 
 @frames_app.command("list")
 def list_frames(ctx: typer.Context) -> None:
+    """List frames the authenticated account can see."""
     _emit_request(ctx, "GET", "/api/frames")
 
 
@@ -456,6 +459,7 @@ def get_frame(
         typer.Option("--frame-id", help="Frame id. Falls back to SKYLIGHT_FRAME_ID."),
     ] = None,
 ) -> None:
+    """Fetch a single frame by id."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(ctx, "GET", f"/api/frames/{frame}")
@@ -493,6 +497,8 @@ def use_frame(
                 str(exc),
                 details={"status_code": exc.status_code, "body": exc.body},
             )
+        except ConfigError as exc:
+            _exit_error(state, "config_error", str(exc))
         except httpx.HTTPError as exc:
             _exit_error(state, "network_error", str(exc))
         selected_frame = _first_resource_id(frames_body)
@@ -513,6 +519,8 @@ def use_frame(
                 str(exc),
                 details={"status_code": exc.status_code, "body": exc.body},
             )
+        except ConfigError as exc:
+            _exit_error(state, "config_error", str(exc))
         except httpx.HTTPError as exc:
             _exit_error(state, "network_error", str(exc))
 
@@ -551,9 +559,10 @@ def list_chores(
     ] = False,
     filter_value: Annotated[
         str | None,
-        typer.Option("--filter", help="Observed value: linked_to_profile."),
+        typer.Option("--filter", help="Optional filter, e.g. linked_to_profile."),
     ] = None,
 ) -> None:
+    """List chores in the selected frame, optionally bounded by date."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     params: dict[str, object] = {
@@ -574,7 +583,10 @@ def create_chore(
         str | None,
         typer.Option("--frame-id", help="Frame id. Falls back to SKYLIGHT_FRAME_ID."),
     ] = None,
-    status: Annotated[str, typer.Option("--status", help="Observed value: pending.")] = "pending",
+    status: Annotated[
+        str,
+        typer.Option("--status", help="Initial status, e.g. pending|complete|skipped."),
+    ] = "pending",
     start_time: Annotated[
         str | None,
         typer.Option("--start-time", help="Optional local time such as 10:00."),
@@ -604,6 +616,7 @@ def create_chore(
         typer.Option("--execute", help="Send the mutation. Without this, only print dry-run."),
     ] = False,
 ) -> None:
+    """Create a chore using the current flat write body."""
     settings = _settings(ctx, frame_id=frame_id, require_config_auth=execute)
     frame = require_frame_id(settings)
     body = _chore_write_body(
@@ -769,6 +782,7 @@ def list_categories(
         typer.Option("--frame-id", help="Frame id. Falls back to SKYLIGHT_FRAME_ID."),
     ] = None,
 ) -> None:
+    """List chore categories for a frame."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(ctx, "GET", f"/api/frames/{frame}/categories")
@@ -782,6 +796,7 @@ def list_devices(
         typer.Option("--frame-id", help="Frame id. Falls back to SKYLIGHT_FRAME_ID."),
     ] = None,
 ) -> None:
+    """List devices linked to a frame."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(ctx, "GET", f"/api/frames/{frame}/devices")
@@ -795,6 +810,7 @@ def list_lists(
         typer.Option("--frame-id", help="Frame id. Falls back to SKYLIGHT_FRAME_ID."),
     ] = None,
 ) -> None:
+    """List shopping/task lists for a frame."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(ctx, "GET", f"/api/frames/{frame}/lists")
@@ -809,6 +825,7 @@ def get_list(
         typer.Option("--frame-id", help="Frame id. Falls back to SKYLIGHT_FRAME_ID."),
     ] = None,
 ) -> None:
+    """Fetch a single list with its items."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(ctx, "GET", f"/api/frames/{frame}/lists/{list_id}")
@@ -839,6 +856,7 @@ def create_task_box_item(
         typer.Option("--execute", help="Send the mutation. Without this, only print dry-run."),
     ] = False,
 ) -> None:
+    """Create a task-box item using the JSON:API write envelope."""
     settings = _settings(ctx, frame_id=frame_id, require_config_auth=execute)
     frame = require_frame_id(settings)
     body = {
@@ -865,6 +883,7 @@ def list_source_calendars(
         typer.Option("--frame-id", help="Frame id. Falls back to SKYLIGHT_FRAME_ID."),
     ] = None,
 ) -> None:
+    """List source calendars connected to a frame."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(ctx, "GET", f"/api/frames/{frame}/source_calendars")
@@ -891,6 +910,7 @@ def list_calendar_events(
         ),
     ] = None,
 ) -> None:
+    """List calendar events in a date window."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(
@@ -918,6 +938,7 @@ def list_rewards(
         typer.Option("--redeemed-at-min", help="Optional date-time lower bound."),
     ] = None,
 ) -> None:
+    """List rewards configured on a frame."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(
@@ -936,6 +957,7 @@ def list_reward_points(
         typer.Option("--frame-id", help="Frame id. Falls back to SKYLIGHT_FRAME_ID."),
     ] = None,
 ) -> None:
+    """List reward-point balances per profile in a frame."""
     settings = _settings(ctx, frame_id=frame_id)
     frame = require_frame_id(settings)
     _emit_request(ctx, "GET", f"/api/frames/{frame}/reward_points")
@@ -950,6 +972,7 @@ def raw_get(
         typer.Option("--query", "-q", help="Query item as key=value. Repeatable."),
     ] = None,
 ) -> None:
+    """Send a raw GET to any API path with optional query items."""
     state = _state(ctx)
     try:
         params = _parse_query(query)
@@ -966,7 +989,7 @@ def raw_post(
         str,
         typer.Option(
             "--body",
-            help="JSON body string or path to a JSON file.",
+            help="JSON body string, or @path/to/file.json to load from disk.",
         ),
     ],
     query: Annotated[
@@ -978,6 +1001,7 @@ def raw_post(
         typer.Option("--execute", help="Send the mutation. Without this, only print dry-run."),
     ] = False,
 ) -> None:
+    """Preview or send a raw POST request."""
     state = _state(ctx)
     try:
         parsed_body = _parse_json_source(body)
@@ -995,7 +1019,7 @@ def raw_put(
         str,
         typer.Option(
             "--body",
-            help="JSON body string or path to a JSON file.",
+            help="JSON body string, or @path/to/file.json to load from disk.",
         ),
     ],
     query: Annotated[
@@ -1019,7 +1043,7 @@ def raw_patch(
         str,
         typer.Option(
             "--body",
-            help="JSON body string or path to a JSON file.",
+            help="JSON body string, or @path/to/file.json to load from disk.",
         ),
     ],
     query: Annotated[
@@ -1047,7 +1071,7 @@ def raw_delete(
         str | None,
         typer.Option(
             "--body",
-            help="Optional JSON body string or path to a JSON file.",
+            help="Optional JSON body string, or @path/to/file.json to load from disk.",
         ),
     ] = None,
     execute: Annotated[
@@ -1172,8 +1196,9 @@ def discover_routes(
     settings = _settings(ctx, require_config_auth=False, require_config_frame=False)
     templates = path or DEFAULT_ROUTE_PROBES
     results = []
+    safe_frame_id = quote(probe_frame_id, safe="")
     for template in templates:
-        concrete_path = template.replace("{frameId}", probe_frame_id)
+        concrete_path = template.replace("{frameId}", safe_frame_id)
         results.append(
             _probe_route(
                 settings,
@@ -1320,6 +1345,18 @@ def _read_check(
             },
             None,
         )
+    except ConfigError as exc:
+        return (
+            {
+                "name": name,
+                "method": "GET",
+                "path": path,
+                "ok": False,
+                "error": str(exc),
+                "kind": "config_error",
+            },
+            None,
+        )
     except httpx.HTTPError as exc:
         return (
             {
@@ -1434,8 +1471,14 @@ def _parse_query(items: list[str] | None) -> dict[str, object]:
 
 
 def _parse_json_source(value: str) -> Any:
-    possible_path = Path(value)
-    source = possible_path.read_text(encoding="utf-8") if possible_path.exists() else value
+    if value.startswith("@"):
+        path = Path(value[1:])
+        try:
+            source = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ConfigError(f"Cannot read JSON body file {path}: {exc}") from exc
+    else:
+        source = value
 
     try:
         return json.loads(source)

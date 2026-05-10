@@ -1,6 +1,21 @@
+"""Headless OAuth login + refresh against Skylight's Rails-style auth flow.
+
+Implements the same dance documented in `docs/auth.md`:
+
+  1. GET  /auth/session/new      -> scrape Rails CSRF authenticity_token
+  2. POST /auth/session          -> form login (302 on success, 200 on bad creds)
+  3. GET  /oauth/authorize       -> 302 with code in redirect query
+  4. POST /oauth/token           -> exchange code or refresh_token for bearer
+
+This is not a browser flow. It impersonates a browser only at the HTTP layer
+(User-Agent + Accept) so the Rails endpoints behave the same as for the mobile
+client.
+"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -25,10 +40,29 @@ class OAuthToken:
     refresh_token: str | None
     expires_in: int | None
     token_type: str | None
+    issued_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def authorization_header(self) -> str:
         return f"Bearer {self.access_token}"
+
+    @property
+    def expires_at(self) -> datetime | None:
+        if self.expires_in is None:
+            return None
+        return self.issued_at + timedelta(seconds=self.expires_in)
+
+    def is_expired(
+        self,
+        *,
+        now: datetime | None = None,
+        leeway: timedelta = timedelta(seconds=30),
+    ) -> bool:
+        expires_at = self.expires_at
+        if expires_at is None:
+            return False
+        current = now or datetime.now(UTC)
+        return current + leeway >= expires_at
 
 
 def login_headless(
@@ -103,7 +137,14 @@ def post_session(
             "Referer": f"{root}/auth/session/new",
         },
     )
-    if response.status_code not in {200, 302}:
+    # Rails returns 302 on successful login; 200 means the form was re-rendered
+    # with errors (typically bad credentials).
+    if response.status_code == 200:
+        raise ConfigError(
+            "login was rejected; the server re-rendered the login form. "
+            "Credentials are likely invalid."
+        )
+    if response.status_code != 302:
         raise ConfigError(_status_error("posting login form", response))
 
 
@@ -157,7 +198,12 @@ def post_oauth_token(client: httpx.Client, root: str, data: dict[str, str]) -> O
     if response.status_code != 200:
         raise ConfigError(_status_error("exchanging OAuth token", response))
 
-    payload = response.json()
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise ConfigError(
+            f"OAuth token response was not valid JSON: {_response_preview(response)}"
+        ) from exc
     if not isinstance(payload, dict):
         raise ConfigError("OAuth token response was not a JSON object")
 
@@ -165,14 +211,40 @@ def post_oauth_token(client: httpx.Client, root: str, data: dict[str, str]) -> O
     if not isinstance(access_token, str) or not access_token:
         raise ConfigError("OAuth token response did not include access_token")
 
-    refresh_token = payload.get("refresh_token")
-    expires_in = payload.get("expires_in")
-    token_type = payload.get("token_type")
     return OAuthToken(
         access_token=access_token,
-        refresh_token=refresh_token if isinstance(refresh_token, str) else None,
-        expires_in=expires_in if isinstance(expires_in, int) else None,
-        token_type=token_type if isinstance(token_type, str) else None,
+        refresh_token=_optional_str(payload.get("refresh_token"), "refresh_token"),
+        expires_in=_optional_int(payload.get("expires_in"), "expires_in"),
+        token_type=_optional_str(payload.get("token_type"), "token_type"),
+    )
+
+
+def _optional_str(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value or None
+    raise ConfigError(
+        f"OAuth response field '{field_name}' must be a string, got {type(value).__name__}"
+    )
+
+
+def _optional_int(value: object, field_name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ConfigError(f"OAuth response field '{field_name}' must be a number, got bool")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ConfigError(
+                f"OAuth response field '{field_name}' is not a valid integer: {value!r}"
+            ) from exc
+    raise ConfigError(
+        f"OAuth response field '{field_name}' has unexpected type {type(value).__name__}"
     )
 
 

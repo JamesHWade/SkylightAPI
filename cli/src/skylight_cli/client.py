@@ -45,9 +45,6 @@ class SkylightClient:
                 json_body=json_body,
             )
 
-        if response.status_code == 304:
-            return {"status": 304, "not_modified": True}
-
         body = decode_response(response)
         if not response.is_success:
             raise ApiError(
@@ -135,30 +132,33 @@ class SkylightClient:
                 transport=self._transport,
             )
         except (ConfigError, httpx.HTTPError):
+            # Refresh itself failed (network or invalid_grant). Fall through and
+            # let the original 401 surface so the agent sees the real status.
             return False
 
         refresh_token = token.refresh_token or self._settings.refresh_token
-        self._settings = replace(
+        new_settings = replace(
             self._settings,
             auth_header=token.authorization_header,
             refresh_token=refresh_token,
         )
-        try:
-            save_profile(
-                config_path=self._settings.config_path,
-                profile=self._settings.profile,
-                values={
-                    "auth_header": token.authorization_header,
-                    "refresh_token": refresh_token,
-                    "device_fingerprint": self._settings.device_fingerprint,
-                    "base_url": self._settings.base_url,
-                    "api_version": self._settings.api_version,
-                    "frame_id": self._settings.frame_id,
-                },
-            )
-        except ConfigError:
-            return False
-
+        # Persist BEFORE rotating in-memory state. If the disk write fails we
+        # must not silently end up with a different bearer in memory than on
+        # disk — the next CLI invocation would replay the (now stale) saved
+        # refresh token. Letting the ConfigError propagate is the right move.
+        save_profile(
+            config_path=new_settings.config_path,
+            profile=new_settings.profile,
+            values={
+                "auth_header": token.authorization_header,
+                "refresh_token": refresh_token,
+                "device_fingerprint": new_settings.device_fingerprint,
+                "base_url": new_settings.base_url,
+                "api_version": new_settings.api_version,
+                "frame_id": new_settings.frame_id,
+            },
+        )
+        self._settings = new_settings
         return True
 
 
@@ -198,4 +198,6 @@ def decode_response(response: httpx.Response) -> Any:
     try:
         return response.json()
     except ValueError:
-        return response.text
+        # Wrap non-JSON bodies so callers can never mistake an HTML error page
+        # for a parsed JSON document.
+        return {"raw_text": response.text, "content_type": content_type or None}

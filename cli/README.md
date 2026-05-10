@@ -125,9 +125,24 @@ skylightctl raw patch /api/frames/FRAME_ID/rewards/REWARD_ID --body '{"name":"Te
 skylightctl raw delete /api/frames/FRAME_ID/chores/CHORE_ID
 ```
 
+`--body` accepts an inline JSON string or `@path/to/file.json` to load from disk.
+Anything not prefixed with `@` is parsed as inline JSON.
+
+Inspection helpers:
+
+```bash
+skylightctl config show              # resolved config with secrets redacted
+skylightctl discover routes          # probe known routes for 401-vs-404 drift
+skylightctl discover routes --path /api/frames/{frameId}/something --probe-frame-id FRAME
+```
+
 The legacy `/api/sessions` flow is intentionally not implemented because it now
 returns an unsupported-version error in live testing. Saved OAuth credentials are
-refreshed automatically after a `401` response, retried once, and persisted.
+refreshed automatically after a `401` response, retried once, and persisted —
+this requires both `refresh_token` and `device_fingerprint` to be saved (run
+`skylightctl auth login --save` to populate them). If the refreshed token cannot
+be persisted to disk, the request fails loudly rather than silently desyncing
+in-memory and on-disk state.
 
 ## Validation
 
