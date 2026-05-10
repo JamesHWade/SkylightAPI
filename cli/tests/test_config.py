@@ -6,7 +6,8 @@ import sys
 
 import pytest
 
-from skylight_cli.config import public_settings, resolve_settings, save_profile
+from skylight_cli.config import load_config, public_settings, resolve_settings, save_profile
+from skylight_cli.errors import ConfigError
 
 
 def test_resolve_settings_uses_cli_env_profile_precedence(tmp_path, monkeypatch) -> None:
@@ -77,3 +78,26 @@ def test_save_profile_does_not_chmod_existing_parent(tmp_path) -> None:
     file_mode = stat.S_IMODE(config_path.stat().st_mode)
     assert parent_mode == 0o755, "must not narrow permissions of a pre-existing dir"
     assert file_mode == 0o600
+
+
+def test_load_config_wraps_io_errors(tmp_path) -> None:
+    with pytest.raises(ConfigError, match="Cannot read config"):
+        load_config(tmp_path)
+
+
+def test_save_profile_wraps_io_errors(tmp_path) -> None:
+    blocked = tmp_path / "blocked"
+    blocked.mkdir()
+
+    with pytest.raises(ConfigError, match="Cannot read config"):
+        save_profile(config_path=blocked, profile="default", values={"frame_id": "FRAME"})
+
+    file_parent = tmp_path / "file-parent"
+    file_parent.write_text("not a directory", encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="Cannot write config"):
+        save_profile(
+            config_path=file_parent / "config.json",
+            profile="default",
+            values={"frame_id": "FRAME"},
+        )

@@ -149,8 +149,8 @@ def test_client_refresh_persistence_failure_propagates(tmp_path: Path) -> None:
             )
         return httpx.Response(401, json={"errors": [{"title": "expired"}]})
 
-    # Point config at an existing *file* path so the parent .mkdir succeeds but
-    # writing the file path itself fails (it is a directory, not a file).
+    # Point config at a directory so persistence fails and surfaces as a
+    # structured ConfigError rather than silently desyncing memory and disk.
     blocked = tmp_path / "blocked"
     blocked.mkdir()
     client = SkylightClient(
@@ -158,7 +158,7 @@ def test_client_refresh_persistence_failure_propagates(tmp_path: Path) -> None:
         transport=httpx.MockTransport(handler),
     )
 
-    with pytest.raises((ConfigError, OSError)):
+    with pytest.raises(ConfigError):
         client.request("GET", "/api/frames/FRAME/categories")
 
 

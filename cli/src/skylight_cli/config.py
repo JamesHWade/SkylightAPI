@@ -56,7 +56,12 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
         return {}
 
     try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
+        raw = config_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ConfigError(f"Cannot read config at {config_path}: {exc}") from exc
+
+    try:
+        data = json.loads(raw)
     except JSONDecodeError as exc:
         raise ConfigError(f"Invalid JSON config at {config_path}: {exc}") from exc
 
@@ -173,16 +178,22 @@ def save_profile(
     profiles[profile] = existing
     config.setdefault("default_profile", profile)
 
-    parent = config_path.parent
-    parent_existed = parent.exists()
-    parent.mkdir(parents=True, exist_ok=True)
-    if not parent_existed:
-        # Only lock down a directory we just created. The user may have pointed
-        # SKYLIGHT_CONFIG at a shared dir like $HOME or ~/.config; chmod-ing
-        # those would break unrelated tools.
-        parent.chmod(0o700)
-    config_path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    config_path.chmod(0o600)
+    try:
+        parent = config_path.parent
+        parent_existed = parent.exists()
+        parent.mkdir(parents=True, exist_ok=True)
+        if not parent_existed:
+            # Only lock down a directory we just created. The user may have pointed
+            # SKYLIGHT_CONFIG at a shared dir like $HOME or ~/.config; chmod-ing
+            # those would break unrelated tools.
+            parent.chmod(0o700)
+        config_path.write_text(
+            json.dumps(config, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        config_path.chmod(0o600)
+    except OSError as exc:
+        raise ConfigError(f"Cannot write config at {config_path}: {exc}") from exc
 
 
 def _profile_data(config: dict[str, Any], profile: str) -> dict[str, Any]:
