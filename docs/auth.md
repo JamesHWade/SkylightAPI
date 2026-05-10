@@ -1,90 +1,93 @@
-# Authentication Guide (How to Capture Your Token)
+# Authentication Guide
 
-> **Unofficial reference** — Use only with accounts you own or are authorized to use. Never commit real tokens.
+> **Unofficial reference** - Use only with accounts you own or are authorized to use. Never commit real tokens.
 
-Skylight requests observed so far use either:
-- `Authorization: Basic <opaque token>` — **Not** username:password; an opaque bearer-like token.
-- `Authorization: Bearer <jwt>` — Standard bearer token (likely JWT).
+## Current Flow: Headless OAuth
 
-This guide shows how to capture a token safely for testing documented endpoints.
+The legacy `POST /api/sessions` endpoint now returns an unsupported-version error
+in live testing and is no longer documented here as a working path.
 
----
+Current public client evidence points to Skylight's OAuth flow:
 
-## 1) Capture via Proxy (Recommended)
+1. `GET https://app.ourskylight.com/auth/session/new`
+2. Extract the Rails `authenticity_token` from the login form.
+3. `POST https://app.ourskylight.com/auth/session` with `email`, `password`, and `authenticity_token`.
+4. `GET https://app.ourskylight.com/oauth/authorize` with:
+   - `client_id=skylight-mobile`
+   - `response_type=code`
+   - `redirect_uri=https://ourskylight.com/welcome`
+   - `scope=everything`
+   - `skylight_api_client_device_fingerprint=<stable UUID>`
+5. Extract `code` from the redirect location.
+6. `POST https://app.ourskylight.com/oauth/token` with the authorization code.
+7. Use the returned access token as:
 
-Use one of these HTTPS debugging proxies:
-- **Proxyman** (macOS GUI)
-- **Charles Proxy** (macOS/Windows GUI)
-- **mitmproxy** (CLI; scriptable)
+```http
+Authorization: Bearer <access_token>
+skylight-api-version: 2026-03-01
+```
 
-### Steps
-1. **Install and trust** the proxy's root certificate (System Keychain).
-2. Enable **SSL Proxying** / **HTTPS capture**.
-3. Launch the Skylight app and **log in**.
-4. In the proxy session list, find the first authenticated request (e.g., `GET /api/frames/{frameId}/chores`).
-5. Copy the **Authorization** header value.
+`skylightctl auth login` implements this flow. Use a stable device fingerprint
+and persist the returned refresh token; refresh tokens rotate when used.
 
-> Tip: If you only see `CONNECT` entries or 4xx errors, enable SSL for the specific hostname and try again.
+```bash
+cd cli
+uv run skylightctl auth login --save
+```
 
-### Safety
-- Tokens are secrets. **Do not** commit real values.
-- When sharing examples, replace with `REDACTED` and keep the structure (header name/value format).
+If `SKYLIGHT_EMAIL` and `SKYLIGHT_PASSWORD` are not set and flags are not passed,
+the command prompts interactively. Password entry is hidden. Use `--no-input` in
+CI or agent runs when missing credentials should fail immediately.
 
----
+`--save` stores the Bearer token, refresh token, and device fingerprint in the
+selected `skylightctl` config profile with file mode `0600`. It does not print
+the token values. Use `--show-secret` only when you need shell exports.
 
-## 2) Electron/Chromium Apps (DevTools)
+After `--save`, later commands read the saved profile automatically. If you do
+not use `--save`, pass `--show-secret` and set the emitted
+`SKYLIGHT_AUTH_HEADER` and `SKYLIGHT_REFRESH_TOKEN` values yourself.
+
+## Refreshing Tokens
+
+```bash
+export SKYLIGHT_DEVICE_FINGERPRINT="same-uuid-used-for-login"
+export SKYLIGHT_REFRESH_TOKEN="..."
+
+cd cli
+uv run skylightctl auth refresh --save
+```
+
+Persist the new refresh token returned by the refresh command.
+
+Normal authenticated CLI requests also refresh automatically after a `401`
+response when a saved refresh token and device fingerprint are available. The
+request is retried once and the rotated refresh token is persisted.
+
+## Capturing Tokens via Proxy
+
+If OAuth login fails locally, capture the official app's current traffic:
+
+1. Install and trust a proxy root certificate with Proxyman, Charles, or mitmproxy.
+2. Enable SSL proxying for `app.ourskylight.com`.
+3. Log into the Skylight app.
+4. Capture an authenticated API request.
+5. Copy the `Authorization` header and any app/client version headers.
+
+## Electron/Chromium Apps
 
 If the desktop app is Electron/Chromium-based:
 
-1. Try **View → Toggle Developer Tools** from the app menu, or launch with:
-   ```bash
-   open -na "/Applications/Skylight.app" --args --remote-debugging-port=9222
-   ```
-2. Open Chrome → `chrome://inspect` → **inspect** the Skylight target.
-3. Go to **Network** tab → click an API call → **Headers** → copy `Authorization`.
+```bash
+open -na "/Applications/Skylight.app" --args --remote-debugging-port=9222
+```
 
-This avoids TLS interception and certificate pinning issues.
+Then inspect the target from Chrome at `chrome://inspect` and copy request
+headers from the Network tab.
 
----
+## Redaction & Sharing
 
-## 3) If HTTPS Decryption Fails (Certificate Pinning)
-
-Some apps validate the server certificate in code (“pinning”). If your proxy shows CONNECT tunnels but no decrypted traffic:
-
-- Try a different proxy (Proxyman/Charles/mitmproxy).
-- Use **Frida** to hook common pinning points (`SecTrustEvaluate`, `NSURLSession`, Alamofire) on macOS.
-- Run Skylight in a **VM** or use **transparent proxying** (e.g., mitmproxy as gateway) to redirect traffic.
-
-> **Note**: Respect the app’s ToS and local laws. Use these techniques only for legitimate interoperability/debugging.
-
----
-
-## 4) Using the Token (Postman/Insomnia/cURL)
-
-- Add the header to your request:
-  ```http
-  Authorization: Basic REDACTED
-  ```
-  **or**
-  ```http
-  Authorization: Bearer REDACTED
-  ```
-
-- Example cURL:
-  ```bash
-  curl 'https://app.ourskylight.com/api/frames/REDACTED/chores?after=2025-08-25&before=2025-08-29'     -H 'Authorization: Basic REDACTED'     -H 'Accept: application/json'
-  ```
-
-If you receive **401 Unauthorized**:
-- Log out/in in the Skylight app and recapture a fresh token.
-- Ensure you copied the header **exactly** (no whitespace changes).
-
----
-
-## 5) Redaction & Sharing
-
-When contributing examples to this repo:
-- Replace tokens and any PII with `REDACTED` (keep keys/shape intact).
-- Use stable placeholders for related IDs if structure matters (e.g., `"CATEGORY_REDACTED"`).
+- Replace tokens, refresh tokens, cookies, emails, and people-linked IDs with `REDACTED`.
+- Keep response structure intact when adding examples.
+- Use stable placeholders for related IDs if structure matters.
 
 See also: `../SECURITY.md` and `../CONTRIBUTING.md`.
