@@ -217,22 +217,7 @@ def capabilities(ctx: typer.Context) -> None:
             {"name": "config show", "method": None, "operationId": None},
         ],
     }
-    _emit_payload(
-        state,
-        payload,
-        human_lines=[
-            f"skylightctl {__version__}",
-            "Default output: JSON",
-            "Write safety: mutations dry-run unless --execute is passed",
-            "",
-            "Commands:",
-            *[
-                f"  {command['name']}"
-                + (f" ({command['method']})" if command.get("method") else "")
-                for command in payload["commands"]
-            ],
-        ],
-    )
+    emit_json(payload, compact=state.compact)
 
 
 @app.command("doctor")
@@ -311,10 +296,7 @@ def doctor(
 def config_show(ctx: typer.Context) -> None:
     """Show resolved config with secrets redacted."""
     state = _state(ctx)
-    try:
-        settings = _settings(ctx, require_config_auth=False, require_config_frame=False)
-    except ConfigError as exc:
-        _exit_error(state, "config_error", str(exc))
+    settings = _settings(ctx, require_config_auth=False, require_config_frame=False)
     payload = public_settings(settings)
     _emit_payload(state, payload, human_lines=_human_config(payload))
 
@@ -1586,7 +1568,7 @@ def _human_discover(payload: dict[str, Any]) -> list[str]:
 def _human_dry_run(payload: dict[str, Any]) -> list[str]:
     request = payload["request"]
     lines = [
-        "Dry run. Pass --execute to send this request.",
+        f"Dry run. {payload['message']}",
         f"{request['method']} {request['url']}",
     ]
     if request.get("params"):

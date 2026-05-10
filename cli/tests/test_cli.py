@@ -42,6 +42,14 @@ def test_capabilities_outputs_json() -> None:
     ]
 
 
+def test_capabilities_ignores_human_output_mode() -> None:
+    result = runner.invoke(main.app, ["--output", "human", "capabilities"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["defaults"]["json"] is True
+
+
 def test_auth_login_redacts_secret_by_default(monkeypatch: Any) -> None:
     def fake_login_headless(**kwargs: Any) -> OAuthToken:
         assert kwargs["email"] == "person@example.com"
