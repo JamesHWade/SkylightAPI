@@ -30,13 +30,19 @@ Most endpoints appear to be under `/api/...` and follow a **JSON:API** style str
 
 ## Authentication
 
-Skylight’s mobile app uses a Bearer token. Example header (token redacted):
+Observed traffic has used both Bearer tokens and opaque Basic tokens. Example
+headers (redacted):
 
 ```
 Authorization: Bearer <REDACTED>
+Authorization: Basic <REDACTED>
 ```
 
-Tokens typically rotate; treat them as secrets and never commit real values.
+Tokens typically rotate; treat them as secrets and never commit real values. See
+[docs/auth.md](docs/auth.md) for current capture guidance and notes about the
+legacy `POST /api/sessions` path. A live check on 2026-05-10 found that endpoint
+returning Skylight's unsupported-version error, so do not treat it as a current
+password login flow without revalidating it.
 
 ## Example Endpoint (documented so far)
 
@@ -53,6 +59,7 @@ See the OpenAPI spec for parameters and a redacted example response.
 
 ## Roadmap
 
+- Document the current OAuth/login flow once request and response shapes are fully captured.
 - Expand coverage: chores create/update, categories, profiles, frames, rewards, schedules.
 - Note rate limits, error shapes, and pagination once understood.
 
@@ -68,18 +75,14 @@ You can explore the API spec in your browser:
 > https://`{user}`.github.io/`{repo}`/swagger.html
 > https://`{user}`.github.io/`{repo}`/redoc.html
 
-## Authentication
-See [docs/auth.md](docs/auth.md) for guidance on capturing and using your own token.
-
 ---
 
 ## Version History
 
 ### v0.4.0
-- **Added authentication endpoint**: `POST /api/sessions` for programmatic login
-- Added complete authentication schemas and request/response documentation
-- Updated auth.md with detailed token generation guide (id:token base64 encoding)
-- Removed auth/login flow from roadmap (now completed)
+- Added historical notes for the legacy `POST /api/sessions` endpoint and its
+  unsupported-version behavior in current live checks.
+- Clarified authentication guidance and token redaction expectations.
 
 ### v0.3.0
 - Added Frames, Source Calendars, Calendar Events, Rewards, Reward Points paths.

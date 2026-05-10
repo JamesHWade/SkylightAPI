@@ -8,6 +8,7 @@ info:
     **Unofficial**; for research and interoperability. All examples redacted.
 servers:
   - url: https://app.ourskylight.com
+x-last-live-route-check: "2026-05-10"
 tags:
   - name: Authentication
   - name: Frames
@@ -35,6 +36,7 @@ components:
     # ---- Authentication ----
     AuthenticationRequest:
       type: object
+      description: Historical request shape for the legacy sessions endpoint.
       properties:
         email:
           type: string
@@ -48,6 +50,7 @@ components:
 
     AuthenticatedUserAttributes:
       type: object
+      description: Historical response attributes for the legacy sessions endpoint.
       properties:
         email:
           type: string
@@ -62,6 +65,7 @@ components:
 
     AuthenticatedUserResource:
       type: object
+      description: Historical response resource for the legacy sessions endpoint.
       properties:
         id:
           type: string
@@ -75,6 +79,7 @@ components:
 
     AuthenticationResponse:
       type: object
+      description: Historical 200 response shape for the legacy sessions endpoint.
       properties:
         data:
           $ref: '#/components/schemas/AuthenticatedUserResource'
@@ -417,16 +422,24 @@ paths:
   /api/sessions:
     post:
       tags: [Authentication]
-      summary: Authenticate user and obtain API token
+      summary: Legacy session login endpoint
+      deprecated: true
       description: |
-        Creates a new session by authenticating with email and password.
-        Returns a user ID and token that must be combined (id:token) and base64 encoded
-        to create the Authorization header for subsequent API requests.
+        Historical captures reported that this endpoint accepted email/password
+        credentials and returned a user ID plus token. The ID and token were
+        combined as `id:token`, base64 encoded, and sent as a Basic
+        Authorization header on later API requests.
 
-        Example:
-        1. Concatenate: "12345678:atu_Gxf2DRxSWCC2WIN8tvj7xDdA5h5ITt6a"
-        2. Base64 encode: echo -n "12345678:atu_Gxf..." | base64
-        3. Use as: Authorization: Basic <base64-encoded-string>
+        Live checks on 2026-05-10 found this endpoint returning HTTP 401 with
+        Skylight's unsupported-version error, including when
+        `skylight-api-version: 2026-03-01` was supplied. Do not treat this as a
+        current login flow without revalidating it.
+
+        Historical token construction example:
+        1. Concatenate: `12345678:atu_Gxf2DRxSWCC2WIN8tvj7xDdA5h5ITt6a`
+        2. Base64 encode the concatenated value.
+        3. Use as: `Authorization: Basic <base64-encoded-string>`
+      x-last-live-route-check: "2026-05-10"
       requestBody:
         required: true
         content:
@@ -434,11 +447,11 @@ paths:
             schema:
               $ref: '#/components/schemas/AuthenticationRequest'
             example:
-              email: "yourname@email.com"
-              password: "thisis-yourpa-ssword"
+              email: "redacted@example.com"
+              password: "REDACTED"
       responses:
         '200':
-          description: Authentication successful
+          description: Historical response shape; not confirmed current.
           content:
             application/json:
               schema:
@@ -448,15 +461,15 @@ paths:
                   id: "12345678"
                   type: "authenticated_user"
                   attributes:
-                    email: "yourname@email.com"
+                    email: "redacted@example.com"
                     token: "atu_Gxf2DRxSWCC2WIN8tvj7xDdA5h5ITt6a"
                     subscription_status: "basic"
                 meta:
                   password_reset: true
         '401':
-          description: Invalid credentials
+          description: Invalid credentials or unsupported client version.
         '422':
-          description: Validation error (invalid email format, missing fields, etc.)
+          description: Historical validation error for invalid email format, missing fields, etc.
 
   # ---- Frames ----
   /api/frames/{frameId}:
