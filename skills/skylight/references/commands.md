@@ -17,7 +17,7 @@ uv run skylightctl capabilities
 ```
 --profile <name>        # config profile (env: SKYLIGHT_PROFILE)
 --base-url <url>        # override base URL (env: SKYLIGHT_BASE_URL)
---auth-header <value>   # full Authorization header (env: SKYLIGHT_AUTH_HEADER)
+--auth-header <value>   # Authorization header value only, e.g. "Bearer <token>" — no "Authorization:" prefix (env: SKYLIGHT_AUTH_HEADER)
 --frame-id <id>         # default frame (env: SKYLIGHT_FRAME_ID)
 --timeout <seconds>     # HTTP timeout (env: SKYLIGHT_TIMEOUT)
 --output {json,human}   # default json

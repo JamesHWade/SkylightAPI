@@ -13,7 +13,7 @@ MAX_SKILL_NAME_LENGTH = 64
 MAX_DESCRIPTION_LENGTH = 1024
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 FRONTMATTER_KEY_RE = re.compile(r"^([A-Za-z0-9_-]+):(?:\s+(.+))?$")
-AGENT_VALUE_RE = re.compile(r'^\s{2}([A-Za-z0-9_-]+):\s+"(.*)"\s*$')
+AGENT_KEY_RE = re.compile(r"^(\s*)([A-Za-z0-9_-]+)\s*:(?:\s+(.*))?\s*$")
 
 
 def main() -> int:
@@ -123,14 +123,47 @@ def parse_frontmatter(path: Path) -> tuple[dict[str, str], list[str]]:
 
 
 def validate_agent_yaml(path: Path, skill_name: str) -> list[str]:
-    values: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        match = AGENT_VALUE_RE.match(line)
-        if match:
-            key, value = match.groups()
-            values[key] = value
-
     errors: list[str] = []
+    values: dict[str, str] = {}
+    current_section: str | None = None
+    section_indent: int | None = None
+
+    for line_number, raw in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = AGENT_KEY_RE.match(raw)
+        if not match:
+            continue
+        indent, key, raw_value = match.groups()
+        indent_len = len(indent)
+        value = (raw_value or "").strip()
+
+        if indent_len == 0:
+            current_section = key if value == "" else None
+            section_indent = None
+            continue
+
+        if current_section != "interface":
+            continue
+
+        if section_indent is None:
+            section_indent = indent_len
+        elif indent_len != section_indent:
+            continue
+
+        if value.startswith("|") or value.startswith(">"):
+            errors.append(
+                f"{path.relative_to(ROOT)}:{line_number} interface.{key} uses an "
+                "unsupported block scalar; inline the value as a quoted or "
+                "unquoted single-line string"
+            )
+            continue
+
+        values[key] = clean_scalar(_strip_inline_comment(value))
+
     for key in ("display_name", "short_description", "default_prompt"):
         if not values.get(key):
             errors.append(f"{path.relative_to(ROOT)} is missing interface.{key}")
@@ -157,6 +190,16 @@ def clean_scalar(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         return value[1:-1]
     return value
+
+
+def _strip_inline_comment(value: str) -> str:
+    """Strip a trailing ' # ...' comment from an unquoted YAML scalar."""
+    if value.startswith(('"', "'")):
+        return value
+    hash_index = value.find(" #")
+    if hash_index == -1:
+        return value
+    return value[:hash_index].rstrip()
 
 
 if __name__ == "__main__":

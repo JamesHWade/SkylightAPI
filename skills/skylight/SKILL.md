@@ -25,7 +25,7 @@ Do **not** engage for unrelated calendar, chore, or reminder apps — Skylight i
   skylightctl ...` or update the installed tool before continuing.
 - **Dry-run first.** Every mutation command prints a redacted request preview unless `--execute` is passed. Always show the dry-run to the user, then ask before re-running with `--execute`.
 - **JSON is the default.** Only pass `--output human` when a person is reading the result. Agents should parse the JSON.
-- **Never log secrets.** Do not run `--show-secret`, do not echo `Authorization` headers, do not paste raw config files. The CLI redacts by default — keep it that way.
+- **Never log secrets.** The CLI redacts by default — keep it that way. Don't echo `Authorization` headers and don't paste raw config files. `--show-secret` is allowed only when the user explicitly asks to export a token to their own shell; even then, never paste that output into chat, logs, or commits.
 - **Redact before committing.** Tokens, emails, frame IDs, and personal data must be scrubbed from any new fixture in `examples/` or any pasted output.
 - **Prefer first-class commands over `raw`.** Use `raw {get,post,put,patch,delete}` only for endpoints that don't yet have a dedicated subcommand. If you reach for `raw` repeatedly, that's a signal to promote the route in `main.py` and `openapi.yaml`.
 - **Ownership.** Only run against accounts and devices the user owns or is authorized to manage.
