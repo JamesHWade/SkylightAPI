@@ -27,11 +27,17 @@ uv sync --extra dev
 uv run skylightctl --help
 ```
 
-Or install the CLI as a local user tool:
+Install the CLI as a user tool after it is published to PyPI:
 
 ```bash
-uv tool install /path/to/SkylightAPI/cli
+uv tool install skylightctl
 skylightctl --help
+```
+
+Until the first PyPI release is published, install from GitHub:
+
+```bash
+uv tool install "skylightctl @ git+https://github.com/JamesHWade/SkylightAPI.git@main#subdirectory=cli"
 ```
 
 Authenticate without storing the password in an environment variable:
@@ -148,6 +154,8 @@ Validate the OpenAPI file:
 ```bash
 npx --yes @openapitools/openapi-generator-cli validate -i docs/openapi/openapi.yaml
 ```
+
+Release instructions for PyPI live in [docs/release.md](docs/release.md).
 
 ## Repository Workflow
 
