@@ -1,178 +1,165 @@
-# Unofficial Skylight API (Community Reference)
+# Unofficial Skylight API
 
-> **Purpose**: A community-maintained reference for documenting the network endpoints used by the Skylight apps, based on observed traffic.  
-> **Scope**: Reverse-engineered, incomplete, and **unofficial**. Not affiliated with Skylight. For research, interoperability, and educational use only.
+Community-maintained notes, OpenAPI metadata, and an experimental
+agent-friendly CLI for the Skylight API observed at:
 
----
-
-## Disclaimers
-
-- Respect the app’s Terms of Service and privacy laws. Only capture traffic from your own account/devices.
-- Redact personal data and secrets (tokens, emails, IDs tied to real people) before committing.
-- This repository **does not** encourage abusing the service or bypassing protections.
-
-## How this repo is organized
-
-- `openapi/openapi.yaml` — A living OpenAPI 3.1 spec for discovered endpoints.
-- `examples/` — Example requests/responses (redacted).
-- `docs/` — How-to guides (capturing traffic, auth notes, etc.).
-- `CONTRIBUTING.md` — How to add endpoints, schemas, and examples safely.
-- `SECURITY.md` — Responsible redaction guidelines.
-- `LICENSE` — Default: CC BY-NC 4.0 (adjust as you prefer).
-
-## Base URL
-
-```
+```text
 https://app.ourskylight.com
 ```
 
-Most endpoints appear to be under `/api/...` and follow a **JSON:API** style structure (`type`, `id`, `attributes`, `relationships`).
+This project is unofficial and not affiliated with Skylight. Use it only with
+accounts and devices you own or are authorized to manage.
 
-## Authentication
+## What Is Here
 
-Skylight’s mobile app uses a Bearer token. Example header (token redacted):
+- `docs/openapi/openapi.yaml` - living OpenAPI reference for observed routes.
+- `docs/auth.md` - OAuth login and token refresh notes.
+- `examples/` - redacted request and response captures.
+- `cli/` - `skylightctl`, a JSON-first CLI intended for agents and scripts.
 
+## CLI Quickstart
+
+Run from a checkout:
+
+```bash
+cd cli
+uv sync --extra dev
+uv run skylightctl --help
 ```
-Authorization: Bearer <REDACTED>
+
+Or install the CLI as a local user tool:
+
+```bash
+uv tool install /path/to/SkylightAPI/cli
+skylightctl --help
 ```
 
-Tokens typically rotate; treat them as secrets and never commit real values.
+Authenticate without storing the password in an environment variable:
 
-## Example Endpoint (documented so far)
+```bash
+skylightctl auth login --save
+```
 
-- `GET /api/frames/{frameId}/chores` — List chores for a frame (household) within date bounds.
+The login command prompts for email and a hidden password, then saves the Bearer
+token, refresh token, and device fingerprint in:
 
-See the OpenAPI spec for parameters and a redacted example response.
+```text
+~/.config/skylightctl/config.json
+```
 
-## Tools & Workflow
+The config file is written with `0600` permissions. Secrets are redacted from
+normal output; use `--show-secret` only when you explicitly need shell exports.
 
-- **Capture**: Charles/Proxyman/mitmproxy (with SSL cert installed).
-- **Inspect**: Confirm hostnames and query params; export sanitized samples to `examples/`.
-- **Document**: Update `openapi/openapi.yaml` and add any new schemas/components.
-- **Test**: Use Postman/Insomnia to verify requests (with your own credentials).
+Save the default frame after login:
+
+```bash
+skylightctl frames use --first
+```
+
+Check whether the CLI is ready:
+
+```bash
+skylightctl doctor
+skylightctl smoke read
+```
+
+`smoke read` only performs read-only requests and reports status, response
+shape, and item counts. It does not print full account data.
+
+## Common Commands
+
+```bash
+skylightctl capabilities
+skylightctl config show
+skylightctl frames list
+skylightctl chores list --after 2026-05-01 --before 2026-05-10
+skylightctl categories list
+skylightctl lists list
+skylightctl calendars events --date-min 2026-05-10 --date-max 2026-05-17
+skylightctl rewards points
+```
+
+Most commands return JSON. Use `--compact` for single-line JSON.
+
+## Safe Writes
+
+Mutation commands dry-run by default and print the redacted request that would
+be sent. Add `--execute` only after inspecting the request.
+
+```bash
+skylightctl chores create --summary "Take out trash" --start 2026-05-10
+skylightctl chores update --chore-id CHORE_ID --summary "Updated title"
+skylightctl chores complete --chore-id CHORE_ID
+skylightctl chores skip --chore-id CHORE_ID
+skylightctl chores delete --chore-id CHORE_ID
+```
+
+Raw escape hatches are available for endpoints that are not promoted to first
+class commands yet:
+
+```bash
+skylightctl raw get /api/frames/FRAME_ID/categories
+skylightctl raw post /api/frames/FRAME_ID/chores --body '{"summary":"Test"}'
+skylightctl raw put /api/frames/FRAME_ID/chores/CHORE_ID --body '{"summary":"Test"}'
+skylightctl raw patch /api/frames/FRAME_ID/rewards/REWARD_ID --body '{"name":"Test"}'
+skylightctl raw delete /api/frames/FRAME_ID/chores/CHORE_ID
+```
+
+## Authentication Model
+
+Current public client evidence and live testing point to OAuth Bearer tokens:
+
+```http
+Authorization: Bearer <access_token>
+skylight-api-version: 2026-03-01
+```
+
+The older `POST /api/sessions` path from an upstream PR currently returns an
+unsupported-version error, so `skylightctl` intentionally does not use it. The
+CLI refreshes saved OAuth credentials automatically after an authenticated
+request receives `401`, then retries once and persists the rotated refresh
+token.
+
+## Agent Notes
+
+Agents should start with:
+
+```bash
+skylightctl capabilities
+skylightctl doctor
+skylightctl smoke read
+```
+
+Then prefer first-class commands over `raw`. For writes, agents should present
+the dry-run request unless they have explicit permission to pass `--execute`.
+
+## Development
+
+```bash
+cd cli
+uv sync --extra dev
+uv run pytest
+uv run ruff check .
+uv run ty check
+```
+
+Validate the OpenAPI file:
+
+```bash
+npx --yes @openapitools/openapi-generator-cli validate -i docs/openapi/openapi.yaml
+```
+
+## Repository Workflow
+
+- Respect Skylight's terms and privacy laws.
+- Capture only your own account/device traffic.
+- Redact tokens, emails, frame IDs, names, and personal data before committing.
+- Document observed route changes in `docs/openapi/openapi.yaml`.
+- Keep examples under `examples/` redacted.
 
 ## Roadmap
 
-- Add auth/login flow (if observable).
-- Expand coverage: chores create/update, categories, profiles, frames, rewards, schedules.
-- Note rate limits, error shapes, and pagination once understood.
-
----
-
-Maintainers: add yourself to `docs/maintainers.md` if you contribute regularly.
-
-
-## v0.2.0
-- Added Categories, Devices, Lists, Task Box endpoints and schemas.
-- Added Basic token auth scheme in addition to Bearer.
-
-
-## v0.3.0
-- Added Frames, Source Calendars, Calendar Events, Rewards, Reward Points paths.
-- Expanded `list_item` schema; corrected color fields to accept `#RRGGBB`.
-- Ensured `chore.status` captured explicitly.
-
-
-## Authentication
-See [docs/auth.md](docs/auth.md) for guidance on capturing and using your own token.
-
-
-## Auth tokens
-See **docs/auth.md** for how to capture a token safely.
-
-
-## Interactive Docs
-You can explore the API spec in a browser:
-
-# Unofficial Skylight API (Community Reference)
-
-> **Purpose**: A community-maintained reference for documenting the network endpoints used by the Skylight apps, based on observed traffic.  
-> **Scope**: Reverse-engineered, incomplete, and **unofficial**. Not affiliated with Skylight. For research, interoperability, and educational use only.
-
----
-
-## Disclaimers
-
-- Respect the app’s Terms of Service and privacy laws. Only capture traffic from your own account/devices.
-- Redact personal data and secrets (tokens, emails, IDs tied to real people) before committing.
-- This repository **does not** encourage abusing the service or bypassing protections.
-
-## How this repo is organized
-
-- `openapi/openapi.yaml` — A living OpenAPI 3.1 spec for discovered endpoints.
-- `examples/` — Example requests/responses (redacted).
-- `docs/` — How-to guides (capturing traffic, auth notes, etc.).
-- `CONTRIBUTING.md` — How to add endpoints, schemas, and examples safely.
-- `SECURITY.md` — Responsible redaction guidelines.
-- `LICENSE` — Default: CC BY-NC 4.0 (adjust as you prefer).
-
-## Base URL
-
-```
-https://app.ourskylight.com
-```
-
-Most endpoints appear to be under `/api/...` and follow a **JSON:API** style structure (`type`, `id`, `attributes`, `relationships`).
-
-## Authentication
-
-Skylight’s mobile app uses a Bearer token. Example header (token redacted):
-
-```
-Authorization: Bearer <REDACTED>
-```
-
-Tokens typically rotate; treat them as secrets and never commit real values.
-
-## Example Endpoint (documented so far)
-
-- `GET /api/frames/{frameId}/chores` — List chores for a frame (household) within date bounds.
-
-See the OpenAPI spec for parameters and a redacted example response.
-
-## Tools & Workflow
-
-- **Capture**: Charles/Proxyman/mitmproxy (with SSL cert installed).
-- **Inspect**: Confirm hostnames and query params; export sanitized samples to `examples/`.
-- **Document**: Update `openapi/openapi.yaml` and add any new schemas/components.
-- **Test**: Use Postman/Insomnia to verify requests (with your own credentials).
-
-## Roadmap
-
-- Add auth/login flow (if observable).
-- Expand coverage: chores create/update, categories, profiles, frames, rewards, schedules.
-- Note rate limits, error shapes, and pagination once understood.
-
----
-
-Maintainers: add yourself to `docs/maintainers.md` if you contribute regularly.
-
-
-## v0.2.0
-- Added Categories, Devices, Lists, Task Box endpoints and schemas.
-- Added Basic token auth scheme in addition to Bearer.
-
-
-## v0.3.0
-- Added Frames, Source Calendars, Calendar Events, Rewards, Reward Points paths.
-- Expanded `list_item` schema; corrected color fields to accept `#RRGGBB`.
-- Ensured `chore.status` captured explicitly.
-
-
-## Authentication
-See [docs/auth.md](docs/auth.md) for guidance on capturing and using your own token.
-
-
-## Auth tokens
-See **docs/auth.md** for how to capture a token safely.
-
-
-## Interactive Docs
-You can explore the API spec in your browser:
-
-- [Swagger UI](https://mightybandito.github.io/Skylight/swagger.html) — interactive “try it” interface
-- [Redoc](https://mightybandito.github.io/Skylight/redoc.html) — clean reference-style docs
-
-> On GitHub Pages these will be accessible at:  
-> https://`{user}`.github.io/`{repo}`/swagger.html  
-> https://`{user}`.github.io/`{repo}`/redoc.html
+- Promote more current routes from live smoke checks and maintained clients.
+- Add guarded commands for list items, rewards, and calendar writes.
+- Add schema assertions to `smoke read` as endpoint shapes stabilize.
+- Capture pagination, rate limits, and error shapes.

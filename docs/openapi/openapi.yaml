@@ -1,13 +1,16 @@
 openapi: 3.0.3
 info:
   title: Unofficial Skylight API (Community Reference)
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Reverse-engineered reference for Skylight endpoints based on observed traffic.
     JSON:API-style resources are common (type, id, attributes, relationships).
     **Unofficial**; for research and interoperability. All examples redacted.
 servers:
   - url: https://app.ourskylight.com
+x-observed-api-version: "2026-03-01"
+x-current-request-api-version: "2026-03-01"
+x-last-live-route-check: "2026-05-10"
 tags:
   - name: Frames
   - name: Chores
@@ -132,6 +135,52 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/JsonApiResourceId'
+
+    ChoreWriteRequest:
+      type: object
+      description: |
+        Current flat body shape used by the mobile API for chore create/update.
+        Older captured examples used a JSON:API envelope; prefer this flat body
+        for new clients.
+      properties:
+        summary:
+          type: string
+        status:
+          type: string
+          enum: [pending, complete, skipped]
+        start:
+          type: string
+          format: date
+        start_time:
+          type: string
+          nullable: true
+        recurring:
+          type: boolean
+        category_id:
+          type: string
+        reward_points:
+          type: integer
+          nullable: true
+        emoji_icon:
+          type: string
+          nullable: true
+        routine:
+          type: boolean
+          nullable: true
+      additionalProperties: true
+
+    ChoreCompletionRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [complete, skipped, pending]
+        instance_date:
+          type: string
+          format: date
+          nullable: true
+      required: [status]
+      additionalProperties: true
 
     ChoreResource:
       type: object
@@ -341,28 +390,49 @@ components:
           $ref: '#/components/schemas/RewardAttributes'
       required: [type, id]
 
-    RewardPointAttributes:
-      type: object
-      additionalProperties: true
-
-    RewardPointResource:
+    RewardPointBalance:
       type: object
       properties:
-        type:
-          type: string
-          enum: [reward_point]
-        id:
-          type: string
-        attributes:
-          $ref: '#/components/schemas/RewardPointAttributes'
-      required: [type, id]
+        category_id:
+          type: integer
+        current_point_balance:
+          type: integer
+      additionalProperties: true
 
 paths:
   # ---- Frames ----
+  /api/frames:
+    get:
+      tags: [Frames]
+      summary: List frames
+      operationId: listFrames
+      description: |
+        Route observed on 2026-05-10 via unauthenticated request returning
+        `401 {"errors":["Invalid token"]}` with `skylight-api-version: 2026-01-01`.
+        Authenticated 200 body shape has not yet been captured.
+      security:
+        - basicToken: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/FrameResource' }
+        '401':
+          description: Unauthorized
+
   /api/frames/{frameId}:
     get:
       tags: [Frames]
       summary: Get frame by id
+      operationId: getFrame
       security:
         - basicToken: []
         - bearerAuth: []
@@ -390,6 +460,7 @@ paths:
     get:
       tags: [Chores]
       summary: List chores for a frame in a date range
+      operationId: listChores
       description: |
         Observed query params: after, before (YYYY-MM-DD), include_late (bool), filter=linked_to_profile.
       security:
@@ -433,6 +504,7 @@ paths:
     post:
       tags: [Chores]
       summary: Create a chore
+      operationId: createChore
       security:
         - basicToken: []
         - bearerAuth: []
@@ -446,19 +518,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                data:
-                  type: object
-                  properties:
-                    type:
-                      type: string
-                      enum: [chore]
-                    attributes:
-                      $ref: '#/components/schemas/ChoreAttributes'
-                    relationships:
-                      $ref: '#/components/schemas/ChoreRelationships'
-                  required: [type, attributes]
+              $ref: '#/components/schemas/ChoreWriteRequest'
       responses:
         '200':
           description: OK
@@ -472,11 +532,101 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/CategoryResource' }
 
+  /api/frames/{frameId}/chores/{choreId}:
+    put:
+      tags: [Chores]
+      summary: Update a chore
+      operationId: updateChore
+      security:
+        - basicToken: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: frameId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: choreId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChoreWriteRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ChoreResource' }
+        '204':
+          description: No Content
+    delete:
+      tags: [Chores]
+      summary: Delete a chore
+      operationId: deleteChore
+      security:
+        - basicToken: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: frameId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: choreId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
+
+  /api/frames/{frameId}/chores/{choreId}/completions:
+    put:
+      tags: [Chores]
+      summary: Complete, skip, or reset a chore completion state
+      operationId: setChoreCompletion
+      description: |
+        Recurring chore instance ids may include a date suffix such as
+        `18731133-2026-04-28-0600`; send the numeric base id in the path and
+        `instance_date: 2026-04-28` in the body.
+      security:
+        - basicToken: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: frameId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: choreId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChoreCompletionRequest'
+      responses:
+        '200':
+          description: OK
+        '204':
+          description: No Content
+
   # ---- Categories ----
   /api/frames/{frameId}/categories:
     get:
       tags: [Categories]
       summary: List categories
+      operationId: listCategories
       security:
         - basicToken: []
         - bearerAuth: []
@@ -504,6 +654,7 @@ paths:
     get:
       tags: [Devices]
       summary: List devices
+      operationId: listDevices
       security:
         - basicToken: []
         - bearerAuth: []
@@ -531,6 +682,7 @@ paths:
     get:
       tags: [Lists]
       summary: List lists
+      operationId: listLists
       security:
         - basicToken: []
         - bearerAuth: []
@@ -557,6 +709,7 @@ paths:
     get:
       tags: [Lists]
       summary: Get list by id
+      operationId: getList
       security:
         - basicToken: []
         - bearerAuth: []
@@ -593,6 +746,7 @@ paths:
     post:
       tags: [TaskBox]
       summary: Create a task box item
+      operationId: createTaskBoxItem
       security:
         - basicToken: []
         - bearerAuth: []
@@ -632,6 +786,7 @@ paths:
     get:
       tags: [Calendars]
       summary: List source calendars
+      operationId: listSourceCalendars
       security:
         - basicToken: []
         - bearerAuth: []
@@ -658,6 +813,7 @@ paths:
     get:
       tags: [Calendars]
       summary: List calendar events for a date range
+      operationId: listCalendarEvents
       security:
         - basicToken: []
         - bearerAuth: []
@@ -709,6 +865,7 @@ paths:
     get:
       tags: [Rewards]
       summary: List rewards
+      operationId: listRewards
       security:
         - basicToken: []
         - bearerAuth: []
@@ -739,6 +896,10 @@ paths:
     get:
       tags: [Rewards]
       summary: List reward points
+      operationId: listRewardPoints
+      description: |
+        Live smoke test on 2026-05-10 returned a top-level array rather than a
+        JSON:API `{data: [...]}` envelope.
       security:
         - basicToken: []
         - bearerAuth: []
@@ -753,10 +914,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items: { $ref: '#/components/schemas/RewardPointResource' }
+                type: array
+                items: { $ref: '#/components/schemas/RewardPointBalance' }
         '304':
           description: Not Modified
