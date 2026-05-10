@@ -1,0 +1,6 @@
+interface:
+  display_name: "Skylight API"
+  short_description: "Operate Skylight API and CLI safely"
+  default_prompt: "Use $skylight to check Skylight CLI setup and run a read-only smoke test."
+policy:
+  allow_implicit_invocation: true
