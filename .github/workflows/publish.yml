@@ -1,0 +1,42 @@
+name: Publish CLI to PyPI
+
+on:
+  push:
+    tags:
+      - "skylightctl-v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: astral-sh/setup-uv@v5
+      - name: Install Python
+        run: uv python install 3.12
+      - name: Validate OpenAPI spec
+        run: npx --yes @openapitools/openapi-generator-cli validate -i docs/openapi/openapi.yaml
+      - name: Install CLI dependencies
+        working-directory: cli
+        run: uv sync --extra dev
+      - name: Run tests
+        working-directory: cli
+        run: uv run pytest
+      - name: Run ruff
+        working-directory: cli
+        run: uv run ruff check .
+      - name: Run ty
+        working-directory: cli
+        run: uv run ty check
+      - name: Build package
+        working-directory: cli
+        run: uv build
+      - name: Publish package
+        working-directory: cli
+        run: uv publish

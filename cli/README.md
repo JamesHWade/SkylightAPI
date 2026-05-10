@@ -14,11 +14,23 @@ uv sync --extra dev
 uv run skylightctl --help
 ```
 
-User-level install from a checkout:
+User-level install after the first PyPI release:
+
+```bash
+uv tool install skylightctl
+skylightctl --help
+```
+
+Until then, install from GitHub:
+
+```bash
+uv tool install "skylightctl @ git+https://github.com/JamesHWade/SkylightAPI.git@main#subdirectory=cli"
+```
+
+From a local checkout:
 
 ```bash
 uv tool install /path/to/SkylightAPI/cli
-skylightctl --help
 ```
 
 ## Setup
@@ -151,3 +163,6 @@ uv run pytest
 uv run ruff check .
 uv run ty check
 ```
+
+PyPI releases are handled by the tag-triggered workflow in
+`.github/workflows/publish.yml`; see `../docs/release.md`.
