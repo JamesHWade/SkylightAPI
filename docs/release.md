@@ -43,8 +43,8 @@ Publishing, so no long-lived PyPI API token is stored in GitHub.
 4. Tag and push from the repository root:
 
    ```bash
-   git tag skylightctl-v0.1.0
-   git push origin skylightctl-v0.1.0
+   git tag skylightctl-vX.Y.Z
+   git push origin skylightctl-vX.Y.Z
    ```
 
 5. Confirm the `Publish CLI to PyPI` workflow succeeds.

@@ -27,14 +27,14 @@ uv sync --extra dev
 uv run skylightctl --help
 ```
 
-Install the CLI as a user tool after it is published to PyPI:
+Install the CLI as a user tool from PyPI:
 
 ```bash
 uv tool install skylightctl
 skylightctl --help
 ```
 
-Until the first PyPI release is published, install from GitHub:
+For unreleased changes, install from GitHub:
 
 ```bash
 uv tool install "skylightctl @ git+https://github.com/JamesHWade/SkylightAPI.git@main#subdirectory=cli"
@@ -72,6 +72,17 @@ skylightctl smoke read
 `smoke read` only performs read-only requests and reports status, response
 shape, and item counts. It does not print full account data.
 
+Most commands return JSON by default because the CLI is intended for agents and
+scripts. Use `--output human` for setup checks, status summaries, read results,
+and dry-run previews that are easier to scan:
+
+```bash
+skylightctl --output human doctor
+skylightctl --output human smoke read
+skylightctl --output human chores list --after 2026-05-01 --before 2026-05-10
+skylightctl --output human chores update --chore-id CHORE_ID --summary "Updated title"
+```
+
 ## Common Commands
 
 ```bash
@@ -85,7 +96,7 @@ skylightctl calendars events --date-min 2026-05-10 --date-max 2026-05-17
 skylightctl rewards points
 ```
 
-Most commands return JSON. Use `--compact` for single-line JSON.
+Use `--compact` for single-line JSON.
 
 ## Safe Writes
 

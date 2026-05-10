@@ -258,6 +258,37 @@ def test_doctor_reports_missing_setup() -> None:
     assert "run `skylightctl auth login --save`" in payload["next_steps"]
 
 
+def test_doctor_human_output_reports_next_steps() -> None:
+    result = runner.invoke(main.app, ["--output", "human", "doctor", "--no-live"])
+
+    assert result.exit_code == 0
+    assert result.output.startswith("Status: needs_setup\n")
+    assert "Next steps:" in result.output
+    assert not result.output.lstrip().startswith("{")
+
+
+def test_config_show_human_output_redacts_secrets(monkeypatch: Any) -> None:
+    monkeypatch.setenv("SKYLIGHT_AUTH_HEADER", "Bearer SECRET")
+    monkeypatch.setenv("SKYLIGHT_REFRESH_TOKEN", "REFRESH")
+    monkeypatch.setenv("SKYLIGHT_FRAME_ID", "FRAME")
+
+    result = runner.invoke(main.app, ["--output", "human", "config", "show"])
+
+    assert result.exit_code == 0
+    assert "Auth header: Bearer REDACTED" in result.output
+    assert "Refresh token: REDACTED" in result.output
+    assert "SECRET" not in result.output
+
+
+def test_invalid_output_format_fails() -> None:
+    result = runner.invoke(main.app, ["--output", "xml", "doctor"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "usage_error"
+    assert "Invalid output format" in payload["error"]["message"]
+
+
 def test_frames_use_first_saves_frame(monkeypatch: Any, tmp_path) -> None:
     class FakeClient:
         def __init__(self, settings: Any) -> None:
@@ -341,6 +372,30 @@ def test_chore_update_dry_run_uses_current_put_shape() -> None:
     assert payload["request"]["method"] == "PUT"
     assert payload["request"]["url"] == "https://app.ourskylight.com/api/frames/FRAME/chores/CHORE"
     assert payload["request"]["body"] == {"summary": "Updated"}
+
+
+def test_chore_update_human_dry_run() -> None:
+    result = runner.invoke(
+        main.app,
+        [
+            "--output",
+            "human",
+            "chores",
+            "update",
+            "--frame-id",
+            "FRAME",
+            "--chore-id",
+            "CHORE",
+            "--summary",
+            "Updated",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Dry run. Pass --execute to send this request." in result.output
+    assert "PUT https://app.ourskylight.com/api/frames/FRAME/chores/CHORE" in result.output
+    assert '"summary": "Updated"' in result.output
+    assert not result.output.lstrip().startswith("{")
 
 
 def test_chore_complete_dry_run_infers_instance_date() -> None:
